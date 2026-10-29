@@ -60,6 +60,11 @@ button,input,textarea{font:inherit}button{cursor:pointer}button:focus-visible,.b
 }
 .bubble:not(.dragging) .orb:before{animation:filmDrift calc(var(--float-time,3s) * 1.3) linear infinite alternate;animation-delay:var(--phase,0s)}
 @media(prefers-reduced-motion:reduce){.bubble-inner,.bubble .orb:before{animation:none!important}}
+
+/* Separate idle orbit from spring: spring only animates the membrane, never the orbit wrapper. */
+.bubble .orb{transform-origin:center;}
+.bubble .bubble-inner{animation-play-state:running}
+.bubble:active .bubble-inner{animation-play-state:paused}
 </style>
 </head>
 <body>
@@ -99,31 +104,104 @@ div.style.setProperty('--drift-y',(Math.cos(t.id*3.71)*9).toFixed(2)+'px');
 div.style.setProperty('--swing',(Math.sin(t.id*4.3)*5).toFixed(2)+'deg');let groupNum=tasks.filter(o=>!o.done&&o.groupId&&o.groupId===t.groupId).length;let children=tasks.filter(o=>!o.done&&o.parentId===t.id).length;div.innerHTML=`<div class="bubble-inner"><div class="orb"><span class="orb-text" style="font-size:${clamp(t.size*.095,9,15)}px">${textForBubble(t)}</span></div></div>${children?`<span class="group-dot">${children} ↳</span>`:groupNum>1?`<span class="group-dot">${groupNum}</span>`:''}`;
  div.addEventListener('pointerdown',onDown);div.addEventListener('pointermove',onMove);div.addEventListener('pointerup',onUp);div.addEventListener('pointercancel',onCancel);div.addEventListener('wheel',onWheel,{passive:false});div.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openFocus(t.id)}});stage.appendChild(div);
 } $('stat').textContent=`${tasks.filter(t=>!t.done).length} активных · ${tasks.filter(t=>t.done).length} выполненных`;}
-function onDown(e){if(e.button!==0&&e.pointerType==='mouse')return;e.preventDefault();const id=Number(e.currentTarget.dataset.id),t=get(id);if(!gest||gest.id!==id)gest={id,pointers:new Map(),startX:t.x,startY:t.y,startSize:t.size,dragged:false,pinched:false,startPointerX:e.clientX,startPointerY:e.clientY};gest.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});e.currentTarget.setPointerCapture(e.pointerId);if(gest.pointers.size===2){const p=[...gest.pointers.values()];gest.pinchDistance=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);gest.startSize=t.size;gest.pinched=true;}e.currentTarget.classList.add('dragging')}
-function onMove(e){
- if(!gest||Number(e.currentTarget.dataset.id)!==gest.id||!gest.pointers.has(e.pointerId))return;
- gest.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
- const t=get(gest.id),el=e.currentTarget;
- if(gest.pointers.size>=2){let p=[...gest.pointers.values()],dist=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);t.size=clamp(Math.round(gest.startSize*dist/(gest.pinchDistance||1)),45,194);el.style.width=t.size+'px';el.style.height=t.size+'px';el.querySelector('.orb-text').style.fontSize=clamp(t.size*.095,9,15)+'px';pushNeighbors(t,8);return;}
- let distance=Math.hypot(e.clientX-gest.startPointerX,e.clientY-gest.startPointerY);
- if(distance>7)gest.dragged=true;
- if(!gest.dragged||gest.pinched)return;
- const r=stage.getBoundingClientRect();
- let dx=(e.clientX-gest.startPointerX)/r.width*100,dy=(e.clientY-gest.startPointerY)/r.height*100;
- t.x=clamp(gest.startX+dx,5,95);t.y=clamp(gest.startY+dy,5,95);
- el.style.left=t.x+'%';el.style.top=t.y+'%';
- pushNeighbors(t,18);
+/* Unified pointer tracking: touch targets are found by proximity, not DOM hitboxes. */
+const contacts=new Map();let gesture=null;
+function chooseBubble(x,y){
+ const rect=stage.getBoundingClientRect(),px=x-rect.left,py=y-rect.top;
+ let closest=null,best=Infinity;
+ for(const t of liveObjects()){
+  const d=Math.hypot(px-t.x*rect.width/100,py-t.y*rect.height/100);
+  const reach=Math.max(t.size/2+22,39);
+  if(d<=reach && d/Math.max(t.size/2,25)<best){best=d/Math.max(t.size/2,25);closest=t;}
+ }
+ return closest;
 }
-function onUp(e){
- if(!gest||Number(e.currentTarget.dataset.id)!==gest.id)return;
- let wasDragged=gest.dragged,wasPinched=gest.pinched,id=gest.id;
- gest.pointers.delete(e.pointerId);if(gest.pointers.size)return;
- e.currentTarget.classList.remove('dragging');gest=null;
- if(wasPinched){settlePhysics(id);return;}
- if(wasDragged){settlePhysics(id);return;}
- openFocus(id);
+function beginContact(e){
+ if(e.pointerType==='mouse'&&e.button!==0)return;
+ if(e.target.closest('.header,.footer,.focus,.modal'))return;
+ const t=chooseBubble(e.clientX,e.clientY);if(!t)return;
+ e.preventDefault();stage.setPointerCapture(e.pointerId);
+ contacts.set(e.pointerId,{id:t.id,x:e.clientX,y:e.clientY,startX:e.clientX,startY:e.clientY});
+ if(contacts.size===1){gesture={mode:'single',id:t.id,origin:{x:t.x,y:t.y},moved:false};return;}
+ if(contacts.size===2){
+  const [p,q]=[...contacts.values()];
+  const distance=Math.max(1,Math.hypot(p.x-q.x,p.y-q.y));
+  if(p.id===q.id){const current=get(p.id);gesture={mode:'pinch',id:p.id,base:current.size,distance,moved:true};}
+  else{gesture={mode:'pair',ids:[p.id,q.id],initial:{[p.id]:{x:get(p.id).x,y:get(p.id).y},[q.id]:{x:get(q.id).x,y:get(q.id).y}},startDist:distance,moved:false};}
+ }
 }
-function onCancel(e){if(gest&&gest.id===Number(e.currentTarget.dataset.id)){gest=null;render()}}
+function updateContact(e){
+ const p=contacts.get(e.pointerId);if(!p||!gesture)return;
+ p.x=e.clientX;p.y=e.clientY;
+ const rect=stage.getBoundingClientRect(),w=rect.width,h=rect.height;
+ if(gesture.mode==='pinch'&&contacts.size===2){
+  const [a,b]=[...contacts.values()],t=get(gesture.id);
+  const d=Math.hypot(a.x-b.x,a.y-b.y);
+  t.size=clamp(gesture.base*d/gesture.distance,45,194);
+  const el=stage.querySelector('[data-id="'+t.id+'"]');
+  if(el){el.style.width=t.size+'px';el.style.height=t.size+'px';el.querySelector('.orb-text').style.fontSize=clamp(t.size*.095,9,15)+'px';}
+  pushNeighbors(t,12);return;
+ }
+ if(gesture.mode==='single'){
+  const t=get(gesture.id);
+  if(!t)return;
+  const original=[...contacts.values()][0];
+  if(Math.hypot(original.x-original.startX,original.y-original.startY)>6)gesture.moved=true;
+  if(!gesture.moved)return;
+  const dx=(original.x-original.startX)/w*100,dy=(original.y-original.startY)/h*100;
+  const group=t.groupId?liveObjects().filter(o=>o.groupId===t.groupId):[t];
+  for(const member of group){
+   if(!gesture.groupStart)gesture.groupStart={};
+   if(!gesture.groupStart[member.id])gesture.groupStart[member.id]={x:member.x,y:member.y};
+   const pos=gesture.groupStart[member.id];
+   member.x=pos.x+dx;member.y=pos.y+dy;
+  }
+  pushNeighbors(t,10);return;
+ }
+ if(gesture.mode==='pair'&&contacts.size===2){
+  let moved=false;
+  for(const c of contacts.values()){
+   const t=get(c.id),o=gesture.initial[c.id];if(!t)continue;
+   if(Math.hypot(c.x-c.startX,c.y-c.startY)>6)moved=true;
+   t.x=o.x+(c.x-c.startX)/w*100;t.y=o.y+(c.y-c.startY)/h*100;
+  }
+  gesture.moved ||= moved;
+  // Pair contact is intentional; the selected pair may overlap, but other bubbles repel.
+  for(const id of gesture.ids){const t=get(id),el=stage.querySelector('[data-id="'+id+'"]');if(el){el.style.left=t.x+'%';el.style.top=t.y+'%';}}
+ }
+}
+function finishContact(e){
+ const p=contacts.get(e.pointerId);if(!p)return;
+ contacts.delete(e.pointerId);
+ if(contacts.size>0)return;
+ const g=gesture;gesture=null;if(!g)return;
+ if(g.mode==='pinch'){settlePhysics(g.id);return;}
+ if(g.mode==='single'){if(g.moved)settlePhysics(g.id);else openFocus(g.id);return;}
+ if(g.mode==='pair'){
+  const a=get(g.ids[0]),b=get(g.ids[1]),rect=stage.getBoundingClientRect();
+  if(a&&b){
+   const distance=Math.hypot((a.x-b.x)*rect.width/100,(a.y-b.y)*rect.height/100);
+   const threshold=(a.size+b.size)/2+12;
+   if(distance<threshold&&g.moved){
+    const group=a.groupId||b.groupId||('g'+groupCount++);
+    a.groupId=group;b.groupId=group;
+    toastMsg('Пузыри соединены · перемещаются вместе',false);
+   }
+   // Hold two members of one group and pull them apart to separate.
+   else if(a.groupId&&a.groupId===b.groupId && distance>threshold+26){
+    b.groupId=null;toastMsg('Пузыри разъединены',false);
+   }
+   // Avoid pair overlap once the gesture ends, except for joined objects.
+   pushNeighbors(a,20);
+  }
+  render();
+ }
+}
+function onDown(e){}function onMove(e){}function onUp(e){}function onCancel(e){}
+stage.addEventListener('pointerdown',beginContact,true);
+stage.addEventListener('pointermove',updateContact);
+stage.addEventListener('pointerup',finishContact);
+stage.addEventListener('pointercancel',finishContact);
 function onWheel(e){e.preventDefault();const t=get(Number(e.currentTarget.dataset.id));t.size=clamp(t.size+(e.deltaY<0?8:-8),45,194);render();}
 function overlapTarget(t){const rect=stage.getBoundingClientRect();let best=null,depth=0;for(const other of tasks){if(other.id===t.id||other.done||other.parentId)continue;const distance=Math.hypot((other.x-t.x)*rect.width/100,(other.y-t.y)*rect.height/100);const actualOverlap=(other.size+t.size)/2-distance;if(actualOverlap>Math.min(other.size,t.size)*.05&&actualOverlap>depth){best=other;depth=actualOverlap}}return best;}
 function showAttach(){const a=get(pending.id),b=get(pending.targetId);showSheet(`<h3>Пузыри соприкоснулись</h3><p>«${escapeHTML(a.title)}» и «${escapeHTML(b.title)}». Что это означает?</p><div class="sheet-actions"><button class="primary" data-act="join">Склеить в группу</button><button data-act="nest">Сделать подзадачей</button><button data-act="cancel">Оставить отдельно</button></div>`,(act)=>{if(act==='cancel'){hideSheet();render();return;}if(act==='join'){let g=b.groupId||a.groupId||('g'+groupCount++);a.groupId=g;b.groupId=g;positionNear(a,b);toastMsg('Пузыри соединены',true)}else if(act==='nest'){a.parentId=b.id;a.groupId=null;toastMsg('Задача помещена внутрь другой',true)}pending=null;hideSheet();render();});}
@@ -170,7 +248,7 @@ function pushNeighbors(active,iterations=12){
    let dx=(q.x-p.x)*w/100,dy=(q.y-p.y)*h/100;
    let d=Math.hypot(dx,dy);
    if(d<.001){const ang=((p.id*19+q.id*31)%360)*Math.PI/180;dx=Math.cos(ang);dy=Math.sin(ang);d=1;}
-   const minimum=(p.size+q.size)/2+5;
+   if(p.groupId&&p.groupId===q.groupId)continue;\n   const minimum=(p.size+q.size)/2+5;
    if(d>=minimum-.1)continue;
    const nx=dx/d,ny=dy/d,overlap=minimum-d;
    // A constrained neighbour may not move outwards; the other sphere must give way.
@@ -199,7 +277,7 @@ function bounce(el){
  // Finish the 5% overshoot before returning to idle motion.
  core.style.animation='none';
  const anim=core.animate([{transform:'scale(1)',offset:0},{transform:'scale(1.05)',offset:.38},{transform:'scale(1)',offset:1}],{duration:530,easing:'cubic-bezier(.24,.7,.27,1)',fill:'forwards'});
- anim.onfinish=()=>{anim.cancel();core.style.animation='';};
+ anim.onfinish=()=>anim.cancel();
 }
 function renderLater(){setTimeout(()=>render(),600)}
 function settlePhysics(id){
