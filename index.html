@@ -366,13 +366,27 @@ gridButton.addEventListener('click',()=>{
  if(layoutMode==='free'){
   objects.forEach(t=>freePositions.set(t.id,{x:t.x,y:t.y,size:t.size}));
   layoutMode='grid';gridButton.textContent='◌';
-  const cols=3,diameter=Math.min(92,(rect.width-35)/cols-8);
-  objects.forEach((t,i)=>{t.size=diameter;t.x=(i%cols+.5)*100/cols;t.y=clamp((Math.floor(i/cols)+.5)*(diameter+10)/rect.height*100,9,93)});
+  // Grid shows every task separately, including members of groups.
+  // Group identifiers survive, and switching back restores the full composition.
+  const ordered=[...objects].sort((a,b)=>{
+   const ka=a.groupId||'~'+String(a.id).padStart(8,'0');
+   const kb=b.groupId||'~'+String(b.id).padStart(8,'0');
+   return ka.localeCompare(kb)||a.id-b.id;
+  });
+  const cols=3,gap=12,sidePadding=14;
+  const diameter=Math.min(92,(rect.width-sidePadding*2-gap*(cols-1))/cols);
+  const cellWidth=(rect.width-sidePadding*2)/cols;
+  const rowHeight=diameter+gap;
+  ordered.forEach((t,i)=>{
+   t.size=diameter;
+   t.x=(sidePadding+(i%cols+.5)*cellWidth)/rect.width*100;
+   t.y=(diameter/2+12+Math.floor(i/cols)*rowHeight)/rect.height*100;
+  });
  }else{
   layoutMode='free';gridButton.textContent='▦';
   objects.forEach(t=>{const saved=freePositions.get(t.id);if(saved)Object.assign(t,saved)});
  }
- render();toastMsg(layoutMode==='grid'?'Ровная сетка':'Свободное пространство',false);
+ render();toastMsg(layoutMode==='grid'?'Все задачи в сетке':'Свободное пространство',false);
 });
 
 render();
