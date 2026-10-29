@@ -65,6 +65,21 @@ button,input,textarea{font:inherit}button{cursor:pointer}button:focus-visible,.b
 .bubble .orb{transform-origin:center;}
 .bubble .bubble-inner{animation-play-state:running}
 .bubble:active .bubble-inner{animation-play-state:paused}
+
+/* Connected bubbles remain distinct; all members use their own animation phase. */
+.group-tray{position:absolute;left:12px;right:12px;bottom:98px;z-index:5;padding:9px 8px 12px;border-radius:20px;background:var(--glass);backdrop-filter:blur(12px)}
+.group-tray-title{font-size:11px;color:var(--muted);text-align:center;margin:0 0 9px}
+.group-tray-row{display:flex;justify-content:center;gap:8px;overflow-x:auto;padding:6px 4px 8px}
+.group-member{flex:0 0 88px;display:flex;flex-direction:column;align-items:center;gap:7px}
+.group-orb{width:70px;height:70px;border:1px solid #a8cfee;border-radius:50%;color:var(--ink);font-size:10px;line-height:1.15;overflow:hidden;padding:9px;background:radial-gradient(circle at 23% 15%,#fff9,transparent 35%),radial-gradient(circle at 70% 80%,#f7a5d288,transparent 47%),radial-gradient(circle at 25% 82%,#90dce299,transparent 50%),#ffffff48;animation:groupFloat 3s ease-in-out infinite alternate;box-shadow:inset -4px -5px 14px #8e9de544}
+.group-member:nth-child(2n) .group-orb{animation-delay:-1.4s;animation-duration:3.7s}
+.group-member:nth-child(3n) .group-orb{animation-delay:-2.1s;animation-duration:2.8s}
+.group-orb.current{outline:2px solid #8baadc;outline-offset:3px}
+.group-member-actions{display:flex;gap:6px}
+.group-member-actions button{background:var(--btn);color:var(--ink);border:1px solid var(--line);border-radius:14px;min-width:31px;height:28px}
+.focus-mini-item{flex:0 0 76px;display:flex;align-items:center;flex-direction:column}
+.focus-mini-item.in-group .mini{outline:2px solid #9ed4ef;outline-offset:2px}
+@keyframes groupFloat{from{transform:translateY(-3px) scale(.975)}to{transform:translateY(3px) scale(1.035)}}
 </style>
 </head>
 <body>
@@ -185,6 +200,14 @@ function finishContact(e){
    if(distance<threshold&&g.moved){
     const group=a.groupId||b.groupId||('g'+groupCount++);
     a.groupId=group;b.groupId=group;
+    // Resting group preserves two distinct animated membranes and readable labels.
+    const ang=Math.atan2((b.y-a.y)*rect.height,(b.x-a.x)*rect.width)||-.5;
+    const desired=(a.size+b.size)*.41;
+    const centerX=(a.x+b.x)*rect.width/200,centerY=(a.y+b.y)*rect.height/200;
+    a.x=(centerX-Math.cos(ang)*desired/2)/rect.width*100;
+    a.y=(centerY-Math.sin(ang)*desired/2)/rect.height*100;
+    b.x=(centerX+Math.cos(ang)*desired/2)/rect.width*100;
+    b.y=(centerY+Math.sin(ang)*desired/2)/rect.height*100;
     toastMsg('Пузыри соединены · перемещаются вместе',false);
    }
    // Hold two members of one group and pull them apart to separate.
@@ -206,15 +229,48 @@ function onWheel(e){e.preventDefault();const t=get(Number(e.currentTarget.datase
 function overlapTarget(t){const rect=stage.getBoundingClientRect();let best=null,depth=0;for(const other of tasks){if(other.id===t.id||other.done||other.parentId)continue;const distance=Math.hypot((other.x-t.x)*rect.width/100,(other.y-t.y)*rect.height/100);const actualOverlap=(other.size+t.size)/2-distance;if(actualOverlap>Math.min(other.size,t.size)*.05&&actualOverlap>depth){best=other;depth=actualOverlap}}return best;}
 function showAttach(){const a=get(pending.id),b=get(pending.targetId);showSheet(`<h3>Пузыри соприкоснулись</h3><p>«${escapeHTML(a.title)}» и «${escapeHTML(b.title)}». Что это означает?</p><div class="sheet-actions"><button class="primary" data-act="join">Склеить в группу</button><button data-act="nest">Сделать подзадачей</button><button data-act="cancel">Оставить отдельно</button></div>`,(act)=>{if(act==='cancel'){hideSheet();render();return;}if(act==='join'){let g=b.groupId||a.groupId||('g'+groupCount++);a.groupId=g;b.groupId=g;positionNear(a,b);toastMsg('Пузыри соединены',true)}else if(act==='nest'){a.parentId=b.id;a.groupId=null;toastMsg('Задача помещена внутрь другой',true)}pending=null;hideSheet();render();});}
 function positionNear(a,b){const rect=stage.getBoundingClientRect();const dx=(a.x-b.x)*rect.width/100,dy=(a.y-b.y)*rect.height/100,angle=Math.atan2(dy,dx),dist=(a.size+b.size)*.40;a.x=clamp(b.x+Math.cos(angle)*dist/rect.width*100,8,92);a.y=clamp(b.y+Math.sin(angle)*dist/rect.height*100,8,92)}
-function openFocus(id){focusId=id;renderFocus();$('focus').classList.add('visible');}
-function renderFocus(){const t=get(focusId);if(!t||t.done){closeFocus();return;}let childCount=tasks.filter(c=>!c.done&&c.parentId===t.id).length;
+function openFocus(id){document.getElementById('groupTray')?.remove();focusId=id;renderFocus();$('focus').classList.add('visible');}
+function renderFocus(){
+ const t=get(focusId);if(!t||t.done){closeFocus();return;}
+ const related=t.groupId?tasks.filter(o=>!o.done&&o.groupId===t.groupId):[];
+ const children=tasks.filter(o=>!o.done&&o.parentId===t.id);
  $('focusCenter').innerHTML=`<div class="orb"><span class="orb-text">${escapeHTML(t.title)}</span></div>`;
- $('focusMeta').innerHTML=`${childCount?`<div class="focus-desc">Внутри: ${childCount} подзадач · коснись маленького пузыря внизу</div>`:''}<button class="pill pop" id="complete">Лопнуть · выполнено</button><div class="focus-desc">Завершение сохраняется в истории, действие можно отменить.</div>`;
+ const members=related.length>1?related:children;
+ $('focusMeta').innerHTML=`<button class="pill pop" id="complete">Лопнуть · выполнено</button>${members.length?'<div class="focus-desc">Выбери любой пузырь группы для редактирования или завершения</div>':''}`;
  $('complete').onclick=()=>completeTask(t.id);
- const others=tasks.filter(o=>!o.done&&o.id!==t.id&&(o.parentId===t.id||!o.parentId));$('focusDock').innerHTML='';for(const o of others){let item=document.createElement('div');item.style.flex='0 0 auto';item.innerHTML=`<button class="mini" title="${escapeHTML(o.title)}"></button><span class="mini-caption">${escapeHTML(o.title)}</span>`;item.querySelector('button').onclick=()=>openFocus(o.id);$('focusDock').appendChild(item);}}
-function closeFocus(){focusId=null;$('focus').classList.remove('visible');render();}
+ const dock=$('focusDock');dock.innerHTML='';
+ const others=tasks.filter(o=>!o.done&&o.id!==t.id&&(o.parentId===t.id||!o.parentId));
+ // Group members are first and larger; the other tasks remain accessible afterward.
+ others.sort((a,b)=>Number(b.groupId===t.groupId&&!!t.groupId)-Number(a.groupId===t.groupId&&!!t.groupId));
+ for(const o of others){
+  const isMember=!!t.groupId&&o.groupId===t.groupId;
+  let item=document.createElement('div');item.className='focus-mini-item'+(isMember?' in-group':'');
+  const button=document.createElement('button');button.className='mini'+(isMember?' member':'');
+  button.setAttribute('aria-label','Открыть '+o.title);button.onclick=()=>openFocus(o.id);
+  const label=document.createElement('span');label.className='mini-caption';label.textContent=o.title;
+  item.append(button,label);dock.append(item);
+ }
+ const existing=$('groupTray');if(existing)existing.remove();
+ if(related.length>1){
+   const tray=document.createElement('div');tray.id='groupTray';tray.className='group-tray';
+   const name=document.createElement('div');name.className='group-tray-title';name.textContent='Группа · '+related.length+' задачи';
+   tray.append(name);
+   const row=document.createElement('div');row.className='group-tray-row';
+   for(const m of related){
+     const wrap=document.createElement('div');wrap.className='group-member';
+     const bubble=document.createElement('button');bubble.className='group-orb'+(m.id===t.id?' current':'');
+     bubble.textContent=m.title;bubble.onclick=()=>{if(m.id!==focusId)openFocus(m.id)};
+     const controls=document.createElement('div');controls.className='group-member-actions';
+     const edit=document.createElement('button');edit.textContent='✎';edit.title='Редактировать';edit.onclick=()=>{focusId=m.id;addOrEdit(m)};
+     const pop=document.createElement('button');pop.textContent='✓';pop.title='Выполнено';pop.onclick=()=>completeTask(m.id);
+     controls.append(edit,pop);wrap.append(bubble,controls);row.append(wrap);
+   }
+   tray.append(row);$('focus').append(tray);
+ }
+}
+function closeFocus(){document.getElementById('groupTray')?.remove();focusId=null;$('focus').classList.remove('visible');render();}
 function playPop(){if(soundEnabled){try{const C=window.AudioContext||window.webkitAudioContext;if(C){const ctx=new C(),osc=ctx.createOscillator(),g=ctx.createGain();osc.type='sine';osc.frequency.setValueAtTime(360,ctx.currentTime);osc.frequency.exponentialRampToValueAtTime(105,ctx.currentTime+.12);g.gain.setValueAtTime(.14,ctx.currentTime);g.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+.17);osc.connect(g);g.connect(ctx.destination);osc.start();osc.stop(ctx.currentTime+.18);osc.onended=()=>ctx.close();}}catch(e){}}if(navigator.vibrate)navigator.vibrate(22)}
-function completeTask(id){const t=get(id);if(!t||t.done)return;playPop();$('burst').classList.add('show');lastCompleted=id;window.setTimeout(()=>{$('burst').classList.remove('show');t.done=true;closeFocus();toastMsg('Задача выполнена',true)},430)}
+function completeTask(id){const t=get(id);if(!t||t.done)return;playPop();$('burst').classList.add('show');lastCompleted=id;window.setTimeout(()=>{$('burst').classList.remove('show');t.done=true;const remaining=t.groupId?tasks.find(x=>!x.done&&x.groupId===t.groupId):null;if(remaining)openFocus(remaining.id);else closeFocus();toastMsg('Задача выполнена',true)},430)}
 function toastMsg(msg,canUndo=false){clearTimeout(toastTimer);$('toastText').textContent=msg;$('undo').style.display=canUndo?'inline':'none';$('toast').classList.add('visible');toastTimer=setTimeout(()=>$('toast').classList.remove('visible'),5800)}
 $('undo').onclick=()=>{if(lastCompleted){const t=get(lastCompleted);if(t)t.done=false;lastCompleted=null;$('toast').classList.remove('visible');render()}};
 function showSheet(html,action){$('sheet').innerHTML=html;$('modal').classList.add('show');$('sheet').querySelectorAll('[data-act]').forEach(x=>x.onclick=()=>action(x.dataset.act));}
