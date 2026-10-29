@@ -80,13 +80,17 @@ button,input,textarea{font:inherit}button{cursor:pointer}button:focus-visible,.b
 .focus-mini-item{flex:0 0 76px;display:flex;align-items:center;flex-direction:column}
 .focus-mini-item.in-group .mini{outline:2px solid #9ed4ef;outline-offset:2px}
 @keyframes groupFloat{from{transform:translateY(-3px) scale(.975)}to{transform:translateY(3px) scale(1.035)}}
+.scroll-space{position:absolute;left:0;right:0;top:88px;bottom:110px;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;scrollbar-width:none;touch-action:pan-y}
+.scroll-space::-webkit-scrollbar{display:none}
+.scroll-space .stage{position:relative;inset:auto;width:100%;height:300%;min-height:100%;overflow:visible;touch-action:pan-y}
+.scroll-space .bubble{touch-action:none}
 </style>
 </head>
 <body>
 <div class="phone" id="phone">
 <div class="sky"></div>
 <header class="header"><div><div class="brand">mind sort <span style="font-weight:300;opacity:.6">/ bubbles</span></div><div class="subtitle">интерактивный эскиз · 01</div></div><div class="header-actions"><button class="ico" id="sound" title="Звук вкл/выкл">♪</button><button class="ico" id="theme" title="Сменить свет/темноту">☾</button></div></header>
-<main class="stage" id="stage" aria-label="Пространство задач"></main>
+<div class="scroll-space" id="scrollSpace"><main class="stage" id="stage" aria-label="Пространство задач"></main></div>
 <footer class="footer"><div class="controls"><div class="foot-note">Перетащи пузырь.<br>Коснись — открыть.<br>Щипок или колёсико — изменить размер.</div><div class="foot-actions"><button class="ico" id="archive" title="Выполненные задачи">✓</button><button class="add" id="add" title="Создать задачу">+</button></div></div><div class="footer-stat" id="stat"></div></footer>
 <section class="focus" id="focus" aria-label="Выбранная задача"><div class="focus-top"><button class="ico" id="back" aria-label="Назад">‹</button><div style="font-size:11px;color:var(--muted)">Выбранная задача</div><button class="ico" id="edit" title="Изменить текст">✎</button></div><div class="focus-center" id="focusCenter"></div><div class="focus-meta" id="focusMeta"></div><div class="focus-dock" id="focusDock"></div></section>
 <div class="burst" id="burst"><div class="burst-ring"></div></div>
@@ -107,6 +111,8 @@ let tasks=[
  {id:6,title:'Подготовить материалы',x:39,y:83,size:69,done:false},
  {id:7,title:'Проверить расписание',x:22,y:49,size:52,done:false}
 ];
+// Convert the original one-screen coordinates to the first of three screens.
+tasks.forEach(t=>{t.y/=3});
 let focusId=null, gest=null, groupCount=1, pending=null, lastCompleted=null, toastTimer=null, soundEnabled=true;
 const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
 const get=id=>tasks.find(t=>t.id===id);
@@ -275,7 +281,7 @@ function toastMsg(msg,canUndo=false){clearTimeout(toastTimer);$('toastText').tex
 $('undo').onclick=()=>{if(lastCompleted){const t=get(lastCompleted);if(t)t.done=false;lastCompleted=null;$('toast').classList.remove('visible');render()}};
 function showSheet(html,action){$('sheet').innerHTML=html;$('modal').classList.add('show');$('sheet').querySelectorAll('[data-act]').forEach(x=>x.onclick=()=>action(x.dataset.act));}
 function hideSheet(){$('modal').classList.remove('show')}
-function addOrEdit(t){let edit=!!t;showSheet(`<h3>${edit?'Изменить задачу':'Новая задача'}</h3><p>Одно действие — один пузырь. Остальные детали добавим позже.</p><textarea id="taskTitle" placeholder="Что нужно сделать?">${edit?escapeHTML(t.title):''}</textarea><div class="sheet-actions"><button class="primary" data-act="save">${edit?'Сохранить':'Создать пузырь'}</button><button data-act="cancel">Отмена</button></div>`,(act)=>{if(act==='cancel'){hideSheet();return}let v=$('taskTitle').value.trim();if(!v)return;if(edit){t.title=v;renderFocus()}else{const id=Math.max(0,...tasks.map(t=>t.id))+1;tasks.push({id,title:v,x:50+Math.random()*20-10,y:40+Math.random()*20-10,size:94,done:false});toastMsg('Новый пузырь создан',false)}hideSheet();render();});setTimeout(()=>$('taskTitle')?.focus(),50)}
+function addOrEdit(t){let edit=!!t;showSheet(`<h3>${edit?'Изменить задачу':'Новая задача'}</h3><p>Одно действие — один пузырь. Остальные детали добавим позже.</p><textarea id="taskTitle" placeholder="Что нужно сделать?">${edit?escapeHTML(t.title):''}</textarea><div class="sheet-actions"><button class="primary" data-act="save">${edit?'Сохранить':'Создать пузырь'}</button><button data-act="cancel">Отмена</button></div>`,(act)=>{if(act==='cancel'){hideSheet();return}let v=$('taskTitle').value.trim();if(!v)return;if(edit){t.title=v;renderFocus()}else{const id=Math.max(0,...tasks.map(t=>t.id))+1;tasks.push({id,title:v,x:50+Math.random()*20-10,y:($('scrollSpace').scrollTop+$('scrollSpace').clientHeight*.45)/stage.getBoundingClientRect().height*100,size:94,done:false});toastMsg('Новый пузырь создан',false)}hideSheet();render();});setTimeout(()=>$('taskTitle')?.focus(),50)}
 $('add').onclick=()=>addOrEdit();$('edit').onclick=()=>addOrEdit(get(focusId));$('back').onclick=closeFocus;
 $('theme').onclick=()=>{phone.classList.toggle('dark');$('theme').textContent=phone.classList.contains('dark')?'☀':'☾'};
 $('sound').onclick=()=>{soundEnabled=!soundEnabled;$('sound').textContent=soundEnabled?'♪':'×';toastMsg(soundEnabled?'Звук включён':'Звук выключен',false)};
