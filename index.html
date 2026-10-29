@@ -44,6 +44,13 @@ button,input,textarea{font:inherit}button{cursor:pointer}button:focus-visible,.b
 .bubble:not(.dragging) .orb:before{animation:filmDrift 9s linear infinite alternate}
 @keyframes filmDrift{from{transform:rotate(-9deg);filter:hue-rotate(-8deg)}to{transform:rotate(12deg);filter:hue-rotate(18deg)}}
 @media(prefers-reduced-motion:reduce){.bubble-inner,.bubble .orb:before{animation:none!important}}
+
+/* Physics study 03: increased organic motion and forgiving hit zones. */
+.bubble::after{content:"";position:absolute;inset:-13px;border-radius:50%;z-index:3;background:transparent;touch-action:none}
+.bubble:not(.dragging) .bubble-inner{animation:alive 5.7s ease-in-out infinite alternate}
+@keyframes alive{0%{transform:translate3d(-2px,2px,0) scale(.985) rotate(-1.7deg)}100%{transform:translate3d(3px,-3px,0) scale(1.017) rotate(1.7deg)}}
+.bubble:not(.dragging) .orb:before{animation:filmDrift 5.5s linear infinite alternate}
+@media(prefers-reduced-motion:reduce){.bubble-inner,.bubble .orb:before{animation:none!important}}
 </style>
 </head>
 <body>
@@ -84,7 +91,7 @@ function onMove(e){
  if(!gest||Number(e.currentTarget.dataset.id)!==gest.id||!gest.pointers.has(e.pointerId))return;
  gest.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
  const t=get(gest.id),el=e.currentTarget;
- if(gest.pointers.size>=2){let p=[...gest.pointers.values()],dist=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);t.size=clamp(Math.round(gest.startSize*dist/(gest.pinchDistance||1)),45,194);el.style.width=t.size+'px';el.style.height=t.size+'px';el.querySelector('.orb-text').style.fontSize=clamp(t.size*.095,9,15)+'px';return;}
+ if(gest.pointers.size>=2){let p=[...gest.pointers.values()],dist=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);t.size=clamp(Math.round(gest.startSize*dist/(gest.pinchDistance||1)),45,194);el.style.width=t.size+'px';el.style.height=t.size+'px';el.querySelector('.orb-text').style.fontSize=clamp(t.size*.095,9,15)+'px';pushNeighbors(t,8);return;}
  let distance=Math.hypot(e.clientX-gest.startPointerX,e.clientY-gest.startPointerY);
  if(distance>7)gest.dragged=true;
  if(!gest.dragged||gest.pinched)return;
@@ -99,7 +106,7 @@ function onUp(e){
  let wasDragged=gest.dragged,wasPinched=gest.pinched,id=gest.id;
  gest.pointers.delete(e.pointerId);if(gest.pointers.size)return;
  e.currentTarget.classList.remove('dragging');gest=null;
- if(wasPinched){const el=stage.querySelector('[data-id="'+id+'"]');if(el)bounce(el);renderLater();return;}
+ if(wasPinched){settlePhysics(id);return;}
  if(wasDragged){settlePhysics(id);return;}
  openFocus(id);
 }
