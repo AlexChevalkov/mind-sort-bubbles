@@ -86,6 +86,8 @@ button,input,textarea{font:inherit}button{cursor:pointer}button:focus-visible,.b
 .scroll-space .bubble{touch-action:none}
 .phone.grid-mode .bubble .bubble-inner,.phone.grid-mode .bubble .orb:before{animation:none!important;transition:none!important}
 .phone.grid-mode .bubble{transition:none}
+.bubble .orb.holding{z-index:8;filter:brightness(1.12);overflow:visible}
+.bubble:has(.orb.holding){z-index:35!important}
 </style>
 </head>
 <body>
@@ -139,13 +141,57 @@ function chooseBubble(x,y){
  }
  return closest;
 }
+
+// Long-press completion lives on the visual membrane, leaving task coordinates unchanged.
+let hold=null;
+function cancelHold(){
+ if(!hold)return;
+ clearTimeout(hold.timer);
+ const node=hold.node;
+ if(node&&node.isConnected){
+  node.classList.remove('holding');
+  node.style.transition='transform 260ms cubic-bezier(.2,.8,.2,1), opacity 260ms ease';
+  node.style.transform='scale(1)';
+  setTimeout(()=>{if(node.isConnected&&!node.classList.contains('holding')){node.style.transition='';node.style.transform='';}},280);
+ }
+ hold=null;
+}
+function startHold(id,pointerId){
+ cancelHold();
+ const el=stage.querySelector('[data-id="'+id+'"]'),node=el?.querySelector('.orb');
+ if(!node)return;
+ // Restart the scale transition on the visible sphere, not the animated outer wrapper.
+ node.style.transition='none';node.style.transform='scale(1)';
+ void node.offsetWidth;
+ node.classList.add('holding');
+ node.style.transition='transform 3000ms cubic-bezier(.35,.1,.68,1), filter 3000ms linear';
+ node.style.transform='scale(2)';
+ hold={id,pointerId,node,timer:setTimeout(()=>{
+   if(!hold||hold.id!==id||hold.pointerId!==pointerId)return;
+   const finishedId=hold.id;
+   hold=null;
+   contacts.clear();gesture=null;
+   completeTaskFromStage(finishedId);
+ },3000)};
+}
+function completeTaskFromStage(id){
+ const t=get(id);if(!t||t.done)return;
+ playPop();
+ const el=stage.querySelector('[data-id="'+id+'"]');
+ if(el){el.style.zIndex='40';el.animate([{opacity:1,filter:'brightness(1.7)',transform:'translate(-50%,-50%) scale(1)'},{opacity:0,filter:'brightness(2)',transform:'translate(-50%,-50%) scale(1.4)'}],{duration:260,fill:'forwards'});}
+ $('burst').classList.add('show');
+ lastCompleted=id;
+ setTimeout(()=>{$('burst').classList.remove('show');t.done=true;render();toastMsg('Задача выполнена',true)},380);
+}
+
 function beginContact(e){
  if(e.pointerType==='mouse'&&e.button!==0)return;
  if(e.target.closest('.header,.footer,.focus,.modal'))return;
  const t=chooseBubble(e.clientX,e.clientY);if(!t)return;
  e.preventDefault();stage.setPointerCapture(e.pointerId);
  contacts.set(e.pointerId,{id:t.id,x:e.clientX,y:e.clientY,startX:e.clientX,startY:e.clientY});
- if(contacts.size===1){gesture={mode:layoutMode==='grid'?'grid-drag':'single',id:t.id,origin:{x:t.x,y:t.y},moved:false};return;}
+ if(contacts.size===1){gesture={mode:layoutMode==='grid'?'grid-drag':'single',id:t.id,origin:{x:t.x,y:t.y},moved:false};startHold(t.id,e.pointerId);return;}
+ if(contacts.size>1)cancelHold();
  if(layoutMode==='grid')return;
  if(contacts.size===2){
   const [p,q]=[...contacts.values()];
@@ -157,6 +203,7 @@ function beginContact(e){
 function updateContact(e){
  const p=contacts.get(e.pointerId);if(!p||!gesture)return;
  p.x=e.clientX;p.y=e.clientY;
+ if(hold&&Math.hypot(p.x-p.startX,p.y-p.startY)>9)cancelHold();
  const rect=stage.getBoundingClientRect(),w=rect.width,h=rect.height;
  if(gesture.mode==='grid-drag'){
   const t=get(gesture.id),c=[...contacts.values()][0];if(!t||!c)return;
@@ -207,6 +254,7 @@ function updateContact(e){
 }
 function finishContact(e){
  const p=contacts.get(e.pointerId);if(!p)return;
+ cancelHold();
  contacts.delete(e.pointerId);
  if(contacts.size>0)return;
  const g=gesture;gesture=null;if(!g)return;
@@ -259,6 +307,7 @@ stage.addEventListener('pointerdown',beginContact,true);
 stage.addEventListener('pointermove',updateContact);
 stage.addEventListener('pointerup',finishContact);
 stage.addEventListener('pointercancel',finishContact);
+window.addEventListener('blur',cancelHold);
 function onWheel(e){e.preventDefault();const t=get(Number(e.currentTarget.dataset.id));t.size=clamp(t.size+(e.deltaY<0?8:-8),45,194);render();}
 function overlapTarget(t){const rect=stage.getBoundingClientRect();let best=null,depth=0;for(const other of tasks){if(other.id===t.id||other.done||other.parentId)continue;const distance=Math.hypot((other.x-t.x)*rect.width/100,(other.y-t.y)*rect.height/100);const actualOverlap=(other.size+t.size)/2-distance;if(actualOverlap>Math.min(other.size,t.size)*.05&&actualOverlap>depth){best=other;depth=actualOverlap}}return best;}
 function showAttach(){const a=get(pending.id),b=get(pending.targetId);showSheet(`<h3>Пузыри соприкоснулись</h3><p>«${escapeHTML(a.title)}» и «${escapeHTML(b.title)}». Что это означает?</p><div class="sheet-actions"><button class="primary" data-act="join">Склеить в группу</button><button data-act="nest">Сделать подзадачей</button><button data-act="cancel">Оставить отдельно</button></div>`,(act)=>{if(act==='cancel'){hideSheet();render();return;}if(act==='join'){let g=b.groupId||a.groupId||('g'+groupCount++);a.groupId=g;b.groupId=g;positionNear(a,b);toastMsg('Пузыри соединены',true)}else if(act==='nest'){a.parentId=b.id;a.groupId=null;toastMsg('Задача помещена внутрь другой',true)}pending=null;hideSheet();render();});}
