@@ -51,6 +51,15 @@ button,input,textarea{font:inherit}button{cursor:pointer}button:focus-visible,.b
 @keyframes alive{0%{transform:translate3d(-6px,5px,0) scale(.965) rotate(-4deg)}100%{transform:translate3d(7px,-7px,0) scale(1.045) rotate(4deg)}}
 .bubble:not(.dragging) .orb:before{animation:filmDrift 3.2s linear infinite alternate}
 @media(prefers-reduced-motion:reduce){.bubble-inner,.bubble .orb:before{animation:none!important}}
+
+/* Independent natural animation timing for each object. */
+.bubble:not(.dragging) .bubble-inner{animation:alive var(--float-time,3.2s) ease-in-out infinite alternate;animation-delay:var(--phase,0s)}
+@keyframes alive{
+  0%{transform:translate3d(calc(var(--drift-x,3px) * -.8),calc(var(--drift-y,3px) * -.8),0) scale(.965) rotate(calc(var(--swing,3deg) * -1))}
+  100%{transform:translate3d(var(--drift-x,3px),var(--drift-y,3px),0) scale(1.045) rotate(var(--swing,3deg))}
+}
+.bubble:not(.dragging) .orb:before{animation:filmDrift calc(var(--float-time,3s) * 1.3) linear infinite alternate;animation-delay:var(--phase,0s)}
+@media(prefers-reduced-motion:reduce){.bubble-inner,.bubble .orb:before{animation:none!important}}
 </style>
 </head>
 <body>
@@ -83,7 +92,11 @@ const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
 const get=id=>tasks.find(t=>t.id===id);
 function escapeHTML(v){return String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function textForBubble(t){return t.size<65?'···':escapeHTML(t.title)}
-function render(){stage.innerHTML='';for(const t of tasks){if(t.done||t.parentId)continue;let div=document.createElement('div');div.className='bubble'+(t.size<65?' small':'');div.dataset.id=t.id;div.tabIndex=0;div.setAttribute('role','button');div.setAttribute('aria-label',t.title);div.style.left=t.x+'%';div.style.top=t.y+'%';div.style.width=t.size+'px';div.style.height=t.size+'px';div.style.setProperty('--float-time',(4.2+t.id*.55)+'s');let groupNum=tasks.filter(o=>!o.done&&o.groupId&&o.groupId===t.groupId).length;let children=tasks.filter(o=>!o.done&&o.parentId===t.id).length;div.innerHTML=`<div class="bubble-inner"><div class="orb"><span class="orb-text" style="font-size:${clamp(t.size*.095,9,15)}px">${textForBubble(t)}</span></div></div>${children?`<span class="group-dot">${children} ↳</span>`:groupNum>1?`<span class="group-dot">${groupNum}</span>`:''}`;
+function render(){stage.innerHTML='';for(const t of tasks){if(t.done||t.parentId)continue;let div=document.createElement('div');div.className='bubble'+(t.size<65?' small':'');div.dataset.id=t.id;div.tabIndex=0;div.setAttribute('role','button');div.setAttribute('aria-label',t.title);div.style.left=t.x+'%';div.style.top=t.y+'%';div.style.width=t.size+'px';div.style.height=t.size+'px';div.style.setProperty('--float-time',(2.4+(Math.sin(t.id*17.13)*.5+.5)*2.2)+'s');
+div.style.setProperty('--phase',(-((t.id*2.731)%7.8))+'s');
+div.style.setProperty('--drift-x',(Math.sin(t.id*2.13)*9).toFixed(2)+'px');
+div.style.setProperty('--drift-y',(Math.cos(t.id*3.71)*9).toFixed(2)+'px');
+div.style.setProperty('--swing',(Math.sin(t.id*4.3)*5).toFixed(2)+'deg');let groupNum=tasks.filter(o=>!o.done&&o.groupId&&o.groupId===t.groupId).length;let children=tasks.filter(o=>!o.done&&o.parentId===t.id).length;div.innerHTML=`<div class="bubble-inner"><div class="orb"><span class="orb-text" style="font-size:${clamp(t.size*.095,9,15)}px">${textForBubble(t)}</span></div></div>${children?`<span class="group-dot">${children} ↳</span>`:groupNum>1?`<span class="group-dot">${groupNum}</span>`:''}`;
  div.addEventListener('pointerdown',onDown);div.addEventListener('pointermove',onMove);div.addEventListener('pointerup',onUp);div.addEventListener('pointercancel',onCancel);div.addEventListener('wheel',onWheel,{passive:false});div.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openFocus(t.id)}});stage.appendChild(div);
 } $('stat').textContent=`${tasks.filter(t=>!t.done).length} активных · ${tasks.filter(t=>t.done).length} выполненных`;}
 function onDown(e){if(e.button!==0&&e.pointerType==='mouse')return;e.preventDefault();const id=Number(e.currentTarget.dataset.id),t=get(id);if(!gest||gest.id!==id)gest={id,pointers:new Map(),startX:t.x,startY:t.y,startSize:t.size,dragged:false,pinched:false,startPointerX:e.clientX,startPointerY:e.clientY};gest.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});e.currentTarget.setPointerCapture(e.pointerId);if(gest.pointers.size===2){const p=[...gest.pointers.values()];gest.pinchDistance=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);gest.startSize=t.size;gest.pinched=true;}e.currentTarget.classList.add('dragging')}
@@ -139,31 +152,62 @@ $('modal').addEventListener('click',e=>{if(e.target===$('modal'))hideSheet()});
 let layoutMode='free', settling=0;
 function liveObjects(){return tasks.filter(o=>!o.done&&!o.parentId)}
 function pushNeighbors(active,iterations=12){
- const a=liveObjects(),rect=stage.getBoundingClientRect();
+ const a=liveObjects(),rect=stage.getBoundingClientRect(),w=rect.width,h=rect.height;
+ const margin=5;
+ const confine=p=>{
+  const radius=p.size/2+margin;
+  const x=Math.min(w-radius,Math.max(radius,p.x*w/100));
+  const y=Math.min(h-radius,Math.max(radius,p.y*h/100));
+  const changed=Math.abs(x-p.x*w/100)+Math.abs(y-p.y*h/100)>.01;
+  p.x=x/w*100;p.y=y/h*100;return changed;
+ };
+ // Boundaries are constraints for every body, not just the dragged one.
+ for(const p of a)confine(p);
  for(let k=0;k<iterations;k++){
-  let changed=false;
+  let movement=false;
   for(let i=0;i<a.length;i++)for(let j=i+1;j<a.length;j++){
-   const p=a[i],q=a[j],dx=(q.x-p.x)*rect.width/100,dy=(q.y-p.y)*rect.height/100;
-   const d=Math.max(.001,Math.hypot(dx,dy)),minimum=(p.size+q.size)/2+5;
-   if(d>=minimum)continue;
-   const overlap=Math.min(24,minimum-d),nx=dx/d,ny=dy/d;
-   const wp=p.id===active.id?0:q.id===active.id?1:.5,wq=1-wp;
-   p.x=clamp(p.x-nx*overlap*wp/rect.width*100,5,95);
-   p.y=clamp(p.y-ny*overlap*wp/rect.height*100,6,94);
-   q.x=clamp(q.x+nx*overlap*wq/rect.width*100,5,95);
-   q.y=clamp(q.y+ny*overlap*wq/rect.height*100,6,94);changed=true;
+   const p=a[i],q=a[j];
+   let dx=(q.x-p.x)*w/100,dy=(q.y-p.y)*h/100;
+   let d=Math.hypot(dx,dy);
+   if(d<.001){const ang=((p.id*19+q.id*31)%360)*Math.PI/180;dx=Math.cos(ang);dy=Math.sin(ang);d=1;}
+   const minimum=(p.size+q.size)/2+5;
+   if(d>=minimum-.1)continue;
+   const nx=dx/d,ny=dy/d,overlap=minimum-d;
+   // A constrained neighbour may not move outwards; the other sphere must give way.
+   const pLeft=p.x*w/100-(p.size/2+margin),pRight=w-(p.x*w/100+p.size/2+margin);
+   const pTop=p.y*h/100-(p.size/2+margin),pBottom=h-(p.y*h/100+p.size/2+margin);
+   const qLeft=q.x*w/100-(q.size/2+margin),qRight=w-(q.x*w/100+q.size/2+margin);
+   const qTop=q.y*h/100-(q.size/2+margin),qBottom=h-(q.y*h/100+q.size/2+margin);
+   const capacityP=Math.min(nx>0?pLeft:pRight,ny>0?pTop:pBottom);
+   const capacityQ=Math.min(nx>0?qRight:qLeft,ny>0?qBottom:qTop);
+   let wp=p.id===active.id?0:q.id===active.id?1:.5;
+   if(capacityP<overlap*wp)wp=Math.max(0,Math.min(1,capacityP/Math.max(overlap,.001)));
+   if(capacityQ<overlap*(1-wp))wp=Math.max(wp,1-capacityQ/Math.max(overlap,.001));
+   wp=Math.min(1,Math.max(0,wp));
+   const wq=1-wp;
+   p.x-=nx*overlap*wp/w*100;p.y-=ny*overlap*wp/h*100;
+   q.x+=nx*overlap*wq/w*100;q.y+=ny*overlap*wq/h*100;
+   confine(p);confine(q);movement=true;
   }
-  if(!changed)break;
+  if(!movement)break;
  }
  for(const t of a){const n=stage.querySelector('[data-id="'+t.id+'"]');if(n){n.style.left=t.x+'%';n.style.top=t.y+'%'}}
 }
-function bounce(el){if(!el)return;const core=el.querySelector('.bubble-inner');if(!core)return;core.animate([{transform:'scale(1)'},{transform:'scale(1.05)',offset:.45},{transform:'scale(1)'}],{duration:430,easing:'ease-out'});}
-function renderLater(){setTimeout(()=>render(),340)}
-function settlePhysics(id){const el=stage.querySelector('[data-id="'+id+'"]');bounce(el);
+function bounce(el){
+ if(!el)return;
+ const core=el.querySelector('.bubble-inner');if(!core)return;
+ // Finish the 5% overshoot before returning to idle motion.
+ core.style.animation='none';
+ const anim=core.animate([{transform:'scale(1)',offset:0},{transform:'scale(1.05)',offset:.38},{transform:'scale(1)',offset:1}],{duration:530,easing:'cubic-bezier(.24,.7,.27,1)',fill:'forwards'});
+ anim.onfinish=()=>{anim.cancel();core.style.animation='';};
+}
+function renderLater(){setTimeout(()=>render(),600)}
+function settlePhysics(id){
+ const el=stage.querySelector('[data-id="'+id+'"]');bounce(el);
  let n=0;cancelAnimationFrame(settling);
  function step(){const active=get(id);if(!active)return;
-  pushNeighbors(active,3);
-  if(++n<24)settling=requestAnimationFrame(step);else render();
+  pushNeighbors(active,5);
+  if(++n<34)settling=requestAnimationFrame(step);
  }
  settling=requestAnimationFrame(step);
 }
