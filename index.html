@@ -47,9 +47,9 @@ button,input,textarea{font:inherit}button{cursor:pointer}button:focus-visible,.b
 
 /* Physics study 03: increased organic motion and forgiving hit zones. */
 .bubble::after{content:"";position:absolute;inset:-13px;border-radius:50%;z-index:3;background:transparent;touch-action:none}
-.bubble:not(.dragging) .bubble-inner{animation:alive 5.7s ease-in-out infinite alternate}
-@keyframes alive{0%{transform:translate3d(-2px,2px,0) scale(.985) rotate(-1.7deg)}100%{transform:translate3d(3px,-3px,0) scale(1.017) rotate(1.7deg)}}
-.bubble:not(.dragging) .orb:before{animation:filmDrift 5.5s linear infinite alternate}
+.bubble:not(.dragging) .bubble-inner{animation:alive 2.9s ease-in-out infinite alternate}
+@keyframes alive{0%{transform:translate3d(-6px,5px,0) scale(.965) rotate(-4deg)}100%{transform:translate3d(7px,-7px,0) scale(1.045) rotate(4deg)}}
+.bubble:not(.dragging) .orb:before{animation:filmDrift 3.2s linear infinite alternate}
 @media(prefers-reduced-motion:reduce){.bubble-inner,.bubble .orb:before{animation:none!important}}
 </style>
 </head>
@@ -157,7 +157,7 @@ function pushNeighbors(active,iterations=12){
  }
  for(const t of a){const n=stage.querySelector('[data-id="'+t.id+'"]');if(n){n.style.left=t.x+'%';n.style.top=t.y+'%'}}
 }
-function bounce(el){if(!el)return;const core=el.querySelector('.bubble-inner');if(!core)return;core.animate([{transform:'scale(1)'},{transform:'scale(1.022)',offset:.45},{transform:'scale(1)'}],{duration:320,easing:'ease-out'});}
+function bounce(el){if(!el)return;const core=el.querySelector('.bubble-inner');if(!core)return;core.animate([{transform:'scale(1)'},{transform:'scale(1.05)',offset:.45},{transform:'scale(1)'}],{duration:430,easing:'ease-out'});}
 function renderLater(){setTimeout(()=>render(),340)}
 function settlePhysics(id){const el=stage.querySelector('[data-id="'+id+'"]');bounce(el);
  let n=0;cancelAnimationFrame(settling);
