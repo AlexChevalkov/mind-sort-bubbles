@@ -84,6 +84,8 @@ button,input,textarea{font:inherit}button{cursor:pointer}button:focus-visible,.b
 .scroll-space::-webkit-scrollbar{display:none}
 .scroll-space .stage{position:relative;inset:auto;width:100%;height:300%;min-height:100%;overflow:visible;touch-action:pan-y}
 .scroll-space .bubble{touch-action:none}
+.phone.grid-mode .bubble .bubble-inner,.phone.grid-mode .bubble .orb:before{animation:none!important;transition:none!important}
+.phone.grid-mode .bubble{transition:none}
 </style>
 </head>
 <body>
@@ -143,7 +145,8 @@ function beginContact(e){
  const t=chooseBubble(e.clientX,e.clientY);if(!t)return;
  e.preventDefault();stage.setPointerCapture(e.pointerId);
  contacts.set(e.pointerId,{id:t.id,x:e.clientX,y:e.clientY,startX:e.clientX,startY:e.clientY});
- if(contacts.size===1){gesture={mode:'single',id:t.id,origin:{x:t.x,y:t.y},moved:false};return;}
+ if(contacts.size===1){gesture={mode:layoutMode==='grid'?'grid-drag':'single',id:t.id,origin:{x:t.x,y:t.y},moved:false};return;}
+ if(layoutMode==='grid')return;
  if(contacts.size===2){
   const [p,q]=[...contacts.values()];
   const distance=Math.max(1,Math.hypot(p.x-q.x,p.y-q.y));
@@ -155,6 +158,17 @@ function updateContact(e){
  const p=contacts.get(e.pointerId);if(!p||!gesture)return;
  p.x=e.clientX;p.y=e.clientY;
  const rect=stage.getBoundingClientRect(),w=rect.width,h=rect.height;
+ if(gesture.mode==='grid-drag'){
+  const t=get(gesture.id),c=[...contacts.values()][0];if(!t||!c)return;
+  if(Math.hypot(c.x-c.startX,c.y-c.startY)>7)gesture.moved=true;
+  if(gesture.moved){
+   t.x=gesture.origin.x+(c.x-c.startX)/w*100;
+   t.y=gesture.origin.y+(c.y-c.startY)/h*100;
+   const el=stage.querySelector('[data-id="'+t.id+'"]');
+   if(el){el.style.left=t.x+'%';el.style.top=t.y+'%';el.style.zIndex='30';}
+  }
+  return;
+ }
  if(gesture.mode==='pinch'&&contacts.size===2){
   const [a,b]=[...contacts.values()],t=get(gesture.id);
   const d=Math.hypot(a.x-b.x,a.y-b.y);
@@ -196,6 +210,20 @@ function finishContact(e){
  contacts.delete(e.pointerId);
  if(contacts.size>0)return;
  const g=gesture;gesture=null;if(!g)return;
+ if(g.mode==='grid-drag'){
+  if(!g.moved){openFocus(g.id);return;}
+  const dragged=get(g.id),rect=stage.getBoundingClientRect();
+  const target=liveObjects().filter(t=>t.id!==g.id).sort((a,b)=>{
+   const da=Math.hypot((a.x-dragged.x)*rect.width/100,(a.y-dragged.y)*rect.height/100);
+   const db=Math.hypot((b.x-dragged.x)*rect.width/100,(b.y-dragged.y)*rect.height/100);return da-db;
+  })[0];
+  if(target){
+   const i=gridOrder.indexOf(g.id),j=gridOrder.indexOf(target.id);
+   const d=Math.hypot((target.x-dragged.x)*rect.width/100,(target.y-dragged.y)*rect.height/100);
+   if(i>=0&&j>=0&&d<Math.max(85,dragged.size*1.35))[gridOrder[i],gridOrder[j]]=[gridOrder[j],gridOrder[i]];
+  }
+  applyGridPositions();render();return;
+ }
  if(g.mode==='pinch'){settlePhysics(g.id);return;}
  if(g.mode==='single'){if(g.moved)settlePhysics(g.id);else openFocus(g.id);return;}
  if(g.mode==='pair'){
@@ -289,7 +317,7 @@ $('archive').onclick=()=>{let done=tasks.filter(t=>t.done);showSheet(`<h3>Вып
 $('modal').addEventListener('click',e=>{if(e.target===$('modal'))hideSheet()});
 
 /* Mind Sort / physical layout study 02 */
-let layoutMode='free', settling=0;
+let layoutMode='free', settling=0, gridOrder=[];
 function liveObjects(){return tasks.filter(o=>!o.done&&!o.parentId)}
 function pushNeighbors(active,iterations=12){
  const a=liveObjects(),rect=stage.getBoundingClientRect(),w=rect.width,h=rect.height;
@@ -361,6 +389,19 @@ gridButton.className='ico';gridButton.textContent='▦';gridButton.title='Сет
 gridButton.setAttribute('aria-label','Сетка или свободное расположение');
 document.querySelector('.header-actions').prepend(gridButton);
 const freePositions=new Map();
+function applyGridPositions(){
+ const rect=stage.getBoundingClientRect(),objects=liveObjects(),cols=3,gap=12,sidePadding=14;
+ const diameter=Math.min(92,(rect.width-sidePadding*2-gap*(cols-1))/cols);
+ const cellWidth=(rect.width-sidePadding*2)/cols,rowHeight=diameter+gap;
+ const byId=new Map(objects.map(t=>[t.id,t]));
+ gridOrder=gridOrder.filter(id=>byId.has(id));
+ for(const t of objects)if(!gridOrder.includes(t.id))gridOrder.push(t.id);
+ gridOrder.forEach((id,i)=>{
+  const t=byId.get(id);t.size=diameter;
+  t.x=(sidePadding+(i%cols+.5)*cellWidth)/rect.width*100;
+  t.y=(diameter/2+12+Math.floor(i/cols)*rowHeight)/rect.height*100;
+ });
+}
 gridButton.addEventListener('click',()=>{
  const objects=liveObjects(),rect=stage.getBoundingClientRect();
  if(layoutMode==='free'){
@@ -368,24 +409,17 @@ gridButton.addEventListener('click',()=>{
   layoutMode='grid';gridButton.textContent='◌';
   // Grid shows every task separately, including members of groups.
   // Group identifiers survive, and switching back restores the full composition.
-  const ordered=[...objects].sort((a,b)=>{
+  gridOrder=[...objects].sort((a,b)=>{
    const ka=a.groupId||'~'+String(a.id).padStart(8,'0');
    const kb=b.groupId||'~'+String(b.id).padStart(8,'0');
    return ka.localeCompare(kb)||a.id-b.id;
-  });
-  const cols=3,gap=12,sidePadding=14;
-  const diameter=Math.min(92,(rect.width-sidePadding*2-gap*(cols-1))/cols);
-  const cellWidth=(rect.width-sidePadding*2)/cols;
-  const rowHeight=diameter+gap;
-  ordered.forEach((t,i)=>{
-   t.size=diameter;
-   t.x=(sidePadding+(i%cols+.5)*cellWidth)/rect.width*100;
-   t.y=(diameter/2+12+Math.floor(i/cols)*rowHeight)/rect.height*100;
-  });
+  }).map(t=>t.id);
+  applyGridPositions();
  }else{
   layoutMode='free';gridButton.textContent='▦';
   objects.forEach(t=>{const saved=freePositions.get(t.id);if(saved)Object.assign(t,saved)});
  }
+ phone.classList.toggle('grid-mode',layoutMode==='grid');
  render();toastMsg(layoutMode==='grid'?'Все задачи в сетке':'Свободное пространство',false);
 });
 
