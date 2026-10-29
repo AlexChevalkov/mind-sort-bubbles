@@ -39,6 +39,11 @@ button,input,textarea{font:inherit}button{cursor:pointer}button:focus-visible,.b
 @keyframes burstring{0%{transform:scale(.77);opacity:1}85%{opacity:.8}100%{transform:scale(1.6);opacity:0}}
 @media (max-width:500px){body{display:block;background:transparent}.phone{border:0;border-radius:0;width:100vw;height:100dvh;box-shadow:none}.focus .focus-center{width:min(76vw,305px)}}
 @media (prefers-reduced-motion:reduce){.bubble-inner{animation:none!important}.burst-ring{animation-duration:.1s}}
+
+/* Subtle living surface motion without scaling the task label */
+.bubble:not(.dragging) .orb:before{animation:filmDrift 9s linear infinite alternate}
+@keyframes filmDrift{from{transform:rotate(-9deg);filter:hue-rotate(-8deg)}to{transform:rotate(12deg);filter:hue-rotate(18deg)}}
+@media(prefers-reduced-motion:reduce){.bubble-inner,.bubble .orb:before{animation:none!important}}
 </style>
 </head>
 <body>
@@ -75,9 +80,29 @@ function render(){stage.innerHTML='';for(const t of tasks){if(t.done||t.parentId
  div.addEventListener('pointerdown',onDown);div.addEventListener('pointermove',onMove);div.addEventListener('pointerup',onUp);div.addEventListener('pointercancel',onCancel);div.addEventListener('wheel',onWheel,{passive:false});div.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openFocus(t.id)}});stage.appendChild(div);
 } $('stat').textContent=`${tasks.filter(t=>!t.done).length} активных · ${tasks.filter(t=>t.done).length} выполненных`;}
 function onDown(e){if(e.button!==0&&e.pointerType==='mouse')return;e.preventDefault();const id=Number(e.currentTarget.dataset.id),t=get(id);if(!gest||gest.id!==id)gest={id,pointers:new Map(),startX:t.x,startY:t.y,startSize:t.size,dragged:false,pinched:false,startPointerX:e.clientX,startPointerY:e.clientY};gest.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});e.currentTarget.setPointerCapture(e.pointerId);if(gest.pointers.size===2){const p=[...gest.pointers.values()];gest.pinchDistance=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);gest.startSize=t.size;gest.pinched=true;}e.currentTarget.classList.add('dragging')}
-function onMove(e){if(!gest||Number(e.currentTarget.dataset.id)!==gest.id||!gest.pointers.has(e.pointerId))return;gest.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});const t=get(gest.id),el=e.currentTarget;if(gest.pointers.size>=2){let p=[...gest.pointers.values()],dist=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);t.size=clamp(Math.round(gest.startSize*dist/(gest.pinchDistance||1)),45,194);el.style.width=t.size+'px';el.style.height=t.size+'px';el.querySelector('.orb-text').style.fontSize=clamp(t.size*.095,9,15)+'px';return;}
-let distance=Math.hypot(e.clientX-gest.startPointerX,e.clientY-gest.startPointerY);if(distance>7)gest.dragged=true;if(!gest.dragged||gest.pinched)return;const r=stage.getBoundingClientRect();let dx=(e.clientX-gest.startPointerX)/r.width*100,dy=(e.clientY-gest.startPointerY)/r.height*100;t.x=clamp(gest.startX+dx,5,95);t.y=clamp(gest.startY+dy,5,95);el.style.left=t.x+'%';el.style.top=t.y+'%';let nearest=overlapTarget(t);stage.querySelectorAll('.grouping-target').forEach(node=>node.classList.remove('grouping-target'));if(nearest){const node=stage.querySelector(`[data-id="${nearest.id}"]`);if(node)node.classList.add('grouping-target');}}
-function onUp(e){if(!gest||Number(e.currentTarget.dataset.id)!==gest.id)return;let wasDragged=gest.dragged,wasPinched=gest.pinched,id=gest.id;gest.pointers.delete(e.pointerId);if(gest.pointers.size)return;e.currentTarget.classList.remove('dragging');gest=null;stage.querySelectorAll('.grouping-target').forEach(node=>node.classList.remove('grouping-target'));if(wasPinched){render();toastMsg('Размер изменён',false);return;}if(wasDragged){const t=get(id),other=overlapTarget(t);if(other){pending={id,targetId:other.id};showAttach()}else render()}else openFocus(id)}
+function onMove(e){
+ if(!gest||Number(e.currentTarget.dataset.id)!==gest.id||!gest.pointers.has(e.pointerId))return;
+ gest.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+ const t=get(gest.id),el=e.currentTarget;
+ if(gest.pointers.size>=2){let p=[...gest.pointers.values()],dist=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);t.size=clamp(Math.round(gest.startSize*dist/(gest.pinchDistance||1)),45,194);el.style.width=t.size+'px';el.style.height=t.size+'px';el.querySelector('.orb-text').style.fontSize=clamp(t.size*.095,9,15)+'px';return;}
+ let distance=Math.hypot(e.clientX-gest.startPointerX,e.clientY-gest.startPointerY);
+ if(distance>7)gest.dragged=true;
+ if(!gest.dragged||gest.pinched)return;
+ const r=stage.getBoundingClientRect();
+ let dx=(e.clientX-gest.startPointerX)/r.width*100,dy=(e.clientY-gest.startPointerY)/r.height*100;
+ t.x=clamp(gest.startX+dx,5,95);t.y=clamp(gest.startY+dy,5,95);
+ el.style.left=t.x+'%';el.style.top=t.y+'%';
+ pushNeighbors(t,18);
+}
+function onUp(e){
+ if(!gest||Number(e.currentTarget.dataset.id)!==gest.id)return;
+ let wasDragged=gest.dragged,wasPinched=gest.pinched,id=gest.id;
+ gest.pointers.delete(e.pointerId);if(gest.pointers.size)return;
+ e.currentTarget.classList.remove('dragging');gest=null;
+ if(wasPinched){const el=stage.querySelector('[data-id="'+id+'"]');if(el)bounce(el);renderLater();return;}
+ if(wasDragged){settlePhysics(id);return;}
+ openFocus(id);
+}
 function onCancel(e){if(gest&&gest.id===Number(e.currentTarget.dataset.id)){gest=null;render()}}
 function onWheel(e){e.preventDefault();const t=get(Number(e.currentTarget.dataset.id));t.size=clamp(t.size+(e.deltaY<0?8:-8),45,194);render();}
 function overlapTarget(t){const rect=stage.getBoundingClientRect();let best=null,depth=0;for(const other of tasks){if(other.id===t.id||other.done||other.parentId)continue;const distance=Math.hypot((other.x-t.x)*rect.width/100,(other.y-t.y)*rect.height/100);const actualOverlap=(other.size+t.size)/2-distance;if(actualOverlap>Math.min(other.size,t.size)*.05&&actualOverlap>depth){best=other;depth=actualOverlap}}return best;}
@@ -102,6 +127,58 @@ $('theme').onclick=()=>{phone.classList.toggle('dark');$('theme').textContent=ph
 $('sound').onclick=()=>{soundEnabled=!soundEnabled;$('sound').textContent=soundEnabled?'♪':'×';toastMsg(soundEnabled?'Звук включён':'Звук выключен',false)};
 $('archive').onclick=()=>{let done=tasks.filter(t=>t.done);showSheet(`<h3>Выполнено: ${done.length}</h3>${done.length?'<p>'+done.map(t=>'✓ '+escapeHTML(t.title)).join('<br>')+'</p>':'<p>Пока пусто. Лопни первый пузырь после выполнения задачи.</p>'}<div class="sheet-actions"><button class="primary" data-act="close">Закрыть</button></div>`,hideSheet)};
 $('modal').addEventListener('click',e=>{if(e.target===$('modal'))hideSheet()});
+
+/* Mind Sort / physical layout study 02 */
+let layoutMode='free', settling=0;
+function liveObjects(){return tasks.filter(o=>!o.done&&!o.parentId)}
+function pushNeighbors(active,iterations=12){
+ const a=liveObjects(),rect=stage.getBoundingClientRect();
+ for(let k=0;k<iterations;k++){
+  let changed=false;
+  for(let i=0;i<a.length;i++)for(let j=i+1;j<a.length;j++){
+   const p=a[i],q=a[j],dx=(q.x-p.x)*rect.width/100,dy=(q.y-p.y)*rect.height/100;
+   const d=Math.max(.001,Math.hypot(dx,dy)),minimum=(p.size+q.size)/2+5;
+   if(d>=minimum)continue;
+   const overlap=Math.min(24,minimum-d),nx=dx/d,ny=dy/d;
+   const wp=p.id===active.id?0:q.id===active.id?1:.5,wq=1-wp;
+   p.x=clamp(p.x-nx*overlap*wp/rect.width*100,5,95);
+   p.y=clamp(p.y-ny*overlap*wp/rect.height*100,6,94);
+   q.x=clamp(q.x+nx*overlap*wq/rect.width*100,5,95);
+   q.y=clamp(q.y+ny*overlap*wq/rect.height*100,6,94);changed=true;
+  }
+  if(!changed)break;
+ }
+ for(const t of a){const n=stage.querySelector('[data-id="'+t.id+'"]');if(n){n.style.left=t.x+'%';n.style.top=t.y+'%'}}
+}
+function bounce(el){if(!el)return;const core=el.querySelector('.bubble-inner');if(!core)return;core.animate([{transform:'scale(1)'},{transform:'scale(1.022)',offset:.45},{transform:'scale(1)'}],{duration:320,easing:'ease-out'});}
+function renderLater(){setTimeout(()=>render(),340)}
+function settlePhysics(id){const el=stage.querySelector('[data-id="'+id+'"]');bounce(el);
+ let n=0;cancelAnimationFrame(settling);
+ function step(){const active=get(id);if(!active)return;
+  pushNeighbors(active,3);
+  if(++n<24)settling=requestAnimationFrame(step);else render();
+ }
+ settling=requestAnimationFrame(step);
+}
+const gridButton=document.createElement('button');
+gridButton.className='ico';gridButton.textContent='▦';gridButton.title='Сетка / свободное расположение';
+gridButton.setAttribute('aria-label','Сетка или свободное расположение');
+document.querySelector('.header-actions').prepend(gridButton);
+const freePositions=new Map();
+gridButton.addEventListener('click',()=>{
+ const objects=liveObjects(),rect=stage.getBoundingClientRect();
+ if(layoutMode==='free'){
+  objects.forEach(t=>freePositions.set(t.id,{x:t.x,y:t.y,size:t.size}));
+  layoutMode='grid';gridButton.textContent='◌';
+  const cols=3,diameter=Math.min(92,(rect.width-35)/cols-8);
+  objects.forEach((t,i)=>{t.size=diameter;t.x=(i%cols+.5)*100/cols;t.y=clamp((Math.floor(i/cols)+.5)*(diameter+10)/rect.height*100,9,93)});
+ }else{
+  layoutMode='free';gridButton.textContent='▦';
+  objects.forEach(t=>{const saved=freePositions.get(t.id);if(saved)Object.assign(t,saved)});
+ }
+ render();toastMsg(layoutMode==='grid'?'Ровная сетка':'Свободное пространство',false);
+});
+
 render();
 })();
 </script>
