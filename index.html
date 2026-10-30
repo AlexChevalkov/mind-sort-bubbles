@@ -90,6 +90,39 @@ button,input,textarea{font:inherit}button{cursor:pointer}button:focus-visible,.b
 .bubble:has(.orb.holding){z-index:35!important}
 
 
+/* Category hues tint only the lower soap film; all bubbles retain the same glass optics. */
+.tone-neutral{--tone-rgb:171,161,224;--tone-rim:168,210,251}
+.tone-work{--tone-rgb:74,161,236;--tone-rim:104,201,255}
+.tone-personal{--tone-rgb:241,118,178;--tone-rim:255,165,214}
+.tone-health{--tone-rgb:84,198,151;--tone-rim:137,234,195}
+.bubble .orb,.focus-center .orb{
+ background:
+ radial-gradient(ellipse 78% 54% at 54% 96%,rgba(var(--tone-rgb,171,161,224),.58),transparent 84%),
+ radial-gradient(ellipse 51% 31% at 29% 18%,rgba(255,255,255,.96),rgba(255,255,255,.10) 58%,transparent 83%),
+ radial-gradient(circle at 74% 66%,rgba(105,207,255,.23),transparent 43%),
+ conic-gradient(from 35deg,rgba(102,225,245,.12),rgba(150,126,241,.20),rgba(246,151,205,.17),rgba(254,238,155,.13),rgba(115,221,252,.13));
+ border-color:rgba(var(--tone-rim,168,210,251),.84);
+ box-shadow:inset 0 0 10px 2px rgba(255,255,255,.83),inset -7px -12px 21px rgba(var(--tone-rgb,171,161,224),.24),inset 7px 5px 14px rgba(144,231,253,.29),0 2px 9px rgba(70,126,174,.18),0 0 0 1px rgba(255,255,255,.27);
+}
+.bubble .orb:after,.focus-center .orb:after{
+ width:58%;height:19%;left:9%;top:9%;
+ background:linear-gradient(180deg,rgba(255,255,255,.98),rgba(255,255,255,.36) 36%,rgba(255,255,255,0));
+ filter:blur(1.2px);box-shadow:0 -2px 6px rgba(255,255,255,.45);
+}
+.dark .bubble .orb,.dark .focus-center .orb{
+ background:
+ radial-gradient(ellipse 79% 57% at 53% 98%,rgba(var(--tone-rgb,171,161,224),.67),transparent 78%),
+ radial-gradient(ellipse 53% 34% at 26% 17%,rgba(255,255,255,.71),transparent 76%),
+ radial-gradient(circle at 72% 65%,rgba(52,159,255,.30),transparent 45%),
+ radial-gradient(circle at 50% 44%,rgba(76,81,150,.17),rgba(120,208,245,.04) 70%);
+ border-color:rgba(var(--tone-rim,168,210,251),.91);
+ box-shadow:inset 0 0 12px rgba(245,241,255,.47),inset -8px -10px 25px rgba(var(--tone-rgb,171,161,224),.43),inset 7px 4px 17px rgba(72,203,245,.30),0 3px 16px rgba(17,76,148,.23);
+}
+.tone-picker{display:flex;justify-content:center;gap:13px;align-items:center;padding:5px 0}
+.tone-swatch{width:29px;height:29px;border-radius:50%;border:1px solid rgba(150,190,224,.65);background:radial-gradient(circle at 29% 20%,#fff,transparent 45%),radial-gradient(circle at 56% 85%,rgba(var(--tone-rgb,171,161,224),.88),rgba(var(--tone-rgb,171,161,224),.13) 72%);box-shadow:inset 0 0 7px #fff8,0 1px 6px #819bb344;cursor:pointer}
+.tone-swatch.selected{outline:2px solid var(--ink);outline-offset:3px}
+.sheet-tones{justify-content:flex-start;padding:15px 5px 7px;gap:17px}
+.group-member .group-orb,.tone-work .mini,.tone-personal .mini,.tone-health .mini{background:radial-gradient(circle at 25% 18%,#fff9,transparent 42%),radial-gradient(circle at 50% 90%,rgba(var(--tone-rgb,171,161,224),.65),transparent 78%),rgba(192,227,245,.16)}
 /* Bubble Surface v2 — thin soap film rather than solid plastic. */
 .bubble .orb,.focus-center .orb{
  background:
@@ -135,39 +168,6 @@ button,input,textarea{font:inherit}button{cursor:pointer}button:focus-visible,.b
  border-color:rgba(var(--tone-rim,168,210,251),.87);
  box-shadow:inset 0 0 7px rgba(247,242,255,.38),inset -5px -8px 16px rgba(var(--tone-rgb,171,161,224),.23),inset 4px 3px 12px rgba(82,194,242,.19),0 3px 15px rgba(17,78,147,.16);
 }
-/* Category hues tint only the lower soap film; all bubbles retain the same glass optics. */
-.tone-neutral{--tone-rgb:171,161,224;--tone-rim:168,210,251}
-.tone-work{--tone-rgb:74,161,236;--tone-rim:104,201,255}
-.tone-personal{--tone-rgb:241,118,178;--tone-rim:255,165,214}
-.tone-health{--tone-rgb:84,198,151;--tone-rim:137,234,195}
-.bubble .orb,.focus-center .orb{
- background:
- radial-gradient(ellipse 78% 54% at 54% 96%,rgba(var(--tone-rgb,171,161,224),.58),transparent 84%),
- radial-gradient(ellipse 51% 31% at 29% 18%,rgba(255,255,255,.96),rgba(255,255,255,.10) 58%,transparent 83%),
- radial-gradient(circle at 74% 66%,rgba(105,207,255,.23),transparent 43%),
- conic-gradient(from 35deg,rgba(102,225,245,.12),rgba(150,126,241,.20),rgba(246,151,205,.17),rgba(254,238,155,.13),rgba(115,221,252,.13));
- border-color:rgba(var(--tone-rim,168,210,251),.84);
- box-shadow:inset 0 0 10px 2px rgba(255,255,255,.83),inset -7px -12px 21px rgba(var(--tone-rgb,171,161,224),.24),inset 7px 5px 14px rgba(144,231,253,.29),0 2px 9px rgba(70,126,174,.18),0 0 0 1px rgba(255,255,255,.27);
-}
-.bubble .orb:after,.focus-center .orb:after{
- width:58%;height:19%;left:9%;top:9%;
- background:linear-gradient(180deg,rgba(255,255,255,.98),rgba(255,255,255,.36) 36%,rgba(255,255,255,0));
- filter:blur(1.2px);box-shadow:0 -2px 6px rgba(255,255,255,.45);
-}
-.dark .bubble .orb,.dark .focus-center .orb{
- background:
- radial-gradient(ellipse 79% 57% at 53% 98%,rgba(var(--tone-rgb,171,161,224),.67),transparent 78%),
- radial-gradient(ellipse 53% 34% at 26% 17%,rgba(255,255,255,.71),transparent 76%),
- radial-gradient(circle at 72% 65%,rgba(52,159,255,.30),transparent 45%),
- radial-gradient(circle at 50% 44%,rgba(76,81,150,.17),rgba(120,208,245,.04) 70%);
- border-color:rgba(var(--tone-rim,168,210,251),.91);
- box-shadow:inset 0 0 12px rgba(245,241,255,.47),inset -8px -10px 25px rgba(var(--tone-rgb,171,161,224),.43),inset 7px 4px 17px rgba(72,203,245,.30),0 3px 16px rgba(17,76,148,.23);
-}
-.tone-picker{display:flex;justify-content:center;gap:13px;align-items:center;padding:5px 0}
-.tone-swatch{width:29px;height:29px;border-radius:50%;border:1px solid rgba(150,190,224,.65);background:radial-gradient(circle at 29% 20%,#fff,transparent 45%),radial-gradient(circle at 56% 85%,rgba(var(--tone-rgb,171,161,224),.88),rgba(var(--tone-rgb,171,161,224),.13) 72%);box-shadow:inset 0 0 7px #fff8,0 1px 6px #819bb344;cursor:pointer}
-.tone-swatch.selected{outline:2px solid var(--ink);outline-offset:3px}
-.sheet-tones{justify-content:flex-start;padding:15px 5px 7px;gap:17px}
-.group-member .group-orb,.tone-work .mini,.tone-personal .mini,.tone-health .mini{background:radial-gradient(circle at 25% 18%,#fff9,transparent 42%),radial-gradient(circle at 50% 90%,rgba(var(--tone-rgb,171,161,224),.65),transparent 78%),rgba(192,227,245,.16)}
 </style>
 </head>
 <body>
