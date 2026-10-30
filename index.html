@@ -164,7 +164,7 @@ function startHold(id,pointerId){
  node.style.transition='none';node.style.transform='scale(1)';
  void node.offsetWidth;
  node.classList.add('holding');
- node.style.transition='transform 3000ms cubic-bezier(.35,.1,.68,1), filter 3000ms linear';
+ node.style.transition='transform 2500ms cubic-bezier(.35,.1,.68,1), filter 2500ms linear';
  node.style.transform='scale(2)';
  hold={id,pointerId,node,timer:setTimeout(()=>{
    if(!hold||hold.id!==id||hold.pointerId!==pointerId)return;
@@ -172,7 +172,7 @@ function startHold(id,pointerId){
    hold=null;
    contacts.clear();gesture=null;
    completeTaskFromStage(finishedId);
- },3000)};
+ },2500)};
 }
 function completeTaskFromStage(id){
  const t=get(id);if(!t||t.done)return;
