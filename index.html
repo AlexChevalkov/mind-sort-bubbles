@@ -88,6 +88,40 @@ button,input,textarea{font:inherit}button{cursor:pointer}button:focus-visible,.b
 .phone.grid-mode .bubble{transition:none}
 .bubble .orb.holding{z-index:8;filter:brightness(1.12);overflow:visible}
 .bubble:has(.orb.holding){z-index:35!important}
+
+/* Category hues tint only the lower soap film; all bubbles retain the same glass optics. */
+.tone-neutral{--tone-rgb:171,161,224;--tone-rim:168,210,251}
+.tone-work{--tone-rgb:74,161,236;--tone-rim:104,201,255}
+.tone-personal{--tone-rgb:241,118,178;--tone-rim:255,165,214}
+.tone-health{--tone-rgb:84,198,151;--tone-rim:137,234,195}
+.bubble .orb,.focus-center .orb{
+ background:
+ radial-gradient(ellipse 78% 54% at 54% 96%,rgba(var(--tone-rgb,171,161,224),.58),transparent 84%),
+ radial-gradient(ellipse 51% 31% at 29% 18%,rgba(255,255,255,.96),rgba(255,255,255,.10) 58%,transparent 83%),
+ radial-gradient(circle at 74% 66%,rgba(105,207,255,.23),transparent 43%),
+ conic-gradient(from 35deg,rgba(102,225,245,.12),rgba(150,126,241,.20),rgba(246,151,205,.17),rgba(254,238,155,.13),rgba(115,221,252,.13));
+ border-color:rgba(var(--tone-rim,168,210,251),.84);
+ box-shadow:inset 0 0 10px 2px rgba(255,255,255,.83),inset -7px -12px 21px rgba(var(--tone-rgb,171,161,224),.24),inset 7px 5px 14px rgba(144,231,253,.29),0 2px 9px rgba(70,126,174,.18),0 0 0 1px rgba(255,255,255,.27);
+}
+.bubble .orb:after,.focus-center .orb:after{
+ width:58%;height:19%;left:9%;top:9%;
+ background:linear-gradient(180deg,rgba(255,255,255,.98),rgba(255,255,255,.36) 36%,rgba(255,255,255,0));
+ filter:blur(1.2px);box-shadow:0 -2px 6px rgba(255,255,255,.45);
+}
+.dark .bubble .orb,.dark .focus-center .orb{
+ background:
+ radial-gradient(ellipse 79% 57% at 53% 98%,rgba(var(--tone-rgb,171,161,224),.67),transparent 78%),
+ radial-gradient(ellipse 53% 34% at 26% 17%,rgba(255,255,255,.71),transparent 76%),
+ radial-gradient(circle at 72% 65%,rgba(52,159,255,.30),transparent 45%),
+ radial-gradient(circle at 50% 44%,rgba(76,81,150,.17),rgba(120,208,245,.04) 70%);
+ border-color:rgba(var(--tone-rim,168,210,251),.91);
+ box-shadow:inset 0 0 12px rgba(245,241,255,.47),inset -8px -10px 25px rgba(var(--tone-rgb,171,161,224),.43),inset 7px 4px 17px rgba(72,203,245,.30),0 3px 16px rgba(17,76,148,.23);
+}
+.tone-picker{display:flex;justify-content:center;gap:13px;align-items:center;padding:5px 0}
+.tone-swatch{width:29px;height:29px;border-radius:50%;border:1px solid rgba(150,190,224,.65);background:radial-gradient(circle at 29% 20%,#fff,transparent 45%),radial-gradient(circle at 56% 85%,rgba(var(--tone-rgb,171,161,224),.88),rgba(var(--tone-rgb,171,161,224),.13) 72%);box-shadow:inset 0 0 7px #fff8,0 1px 6px #819bb344;cursor:pointer}
+.tone-swatch.selected{outline:2px solid var(--ink);outline-offset:3px}
+.sheet-tones{justify-content:flex-start;padding:15px 5px 7px;gap:17px}
+.group-member .group-orb,.tone-work .mini,.tone-personal .mini,.tone-health .mini{background:radial-gradient(circle at 25% 18%,#fff9,transparent 42%),radial-gradient(circle at 50% 90%,rgba(var(--tone-rgb,171,161,224),.65),transparent 78%),rgba(192,227,245,.16)}
 </style>
 </head>
 <body>
@@ -122,7 +156,7 @@ const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
 const get=id=>tasks.find(t=>t.id===id);
 function escapeHTML(v){return String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function textForBubble(t){return t.size<65?'···':escapeHTML(t.title)}
-function render(){stage.innerHTML='';for(const t of tasks){if(t.done||t.parentId)continue;let div=document.createElement('div');div.className='bubble'+(t.size<65?' small':'');div.dataset.id=t.id;div.tabIndex=0;div.setAttribute('role','button');div.setAttribute('aria-label',t.title);div.style.left=t.x+'%';div.style.top=t.y+'%';div.style.width=t.size+'px';div.style.height=t.size+'px';div.style.setProperty('--float-time',(2.4+(Math.sin(t.id*17.13)*.5+.5)*2.2)+'s');
+function render(){stage.innerHTML='';for(const t of tasks){if(t.done||t.parentId)continue;let div=document.createElement('div');div.className='bubble tone-'+(t.tone||'neutral')+(t.size<65?' small':'');div.dataset.id=t.id;div.tabIndex=0;div.setAttribute('role','button');div.setAttribute('aria-label',t.title);div.style.left=t.x+'%';div.style.top=t.y+'%';div.style.width=t.size+'px';div.style.height=t.size+'px';div.style.setProperty('--float-time',(2.4+(Math.sin(t.id*17.13)*.5+.5)*2.2)+'s');
 div.style.setProperty('--phase',(-((t.id*2.731)%7.8))+'s');
 div.style.setProperty('--drift-x',(Math.sin(t.id*2.13)*9).toFixed(2)+'px');
 div.style.setProperty('--drift-y',(Math.cos(t.id*3.71)*9).toFixed(2)+'px');
@@ -317,10 +351,20 @@ function renderFocus(){
  const t=get(focusId);if(!t||t.done){closeFocus();return;}
  const related=t.groupId?tasks.filter(o=>!o.done&&o.groupId===t.groupId):[];
  const children=tasks.filter(o=>!o.done&&o.parentId===t.id);
+ $('focusCenter').className='focus-center tone-'+(t.tone||'neutral');
  $('focusCenter').innerHTML=`<div class="orb"><span class="orb-text">${escapeHTML(t.title)}</span></div>`;
  const members=related.length>1?related:children;
  $('focusMeta').innerHTML=`<button class="pill pop" id="complete">Лопнуть · выполнено</button>${members.length?'<div class="focus-desc">Выбери любой пузырь группы для редактирования или завершения</div>':''}`;
  $('complete').onclick=()=>completeTask(t.id);
+ const picker=document.createElement('div');picker.className='tone-picker';picker.setAttribute('aria-label','Цветовое семейство');
+ for(const tone of ['neutral','work','personal','health']){
+  const btn=document.createElement('button');btn.type='button';btn.className='tone-swatch tone-'+tone+(tone===(t.tone||'neutral')?' selected':'');
+  btn.title=({neutral:'Без категории',work:'Работа',personal:'Личное',health:'Здоровье'})[tone];
+  btn.setAttribute('aria-label',btn.title);
+  btn.onclick=()=>{t.tone=tone;renderFocus();render();};
+  picker.appendChild(btn);
+ }
+ $('focusMeta').appendChild(picker);
  const dock=$('focusDock');dock.innerHTML='';
  const others=tasks.filter(o=>!o.done&&o.id!==t.id&&(o.parentId===t.id||!o.parentId));
  // Group members are first and larger; the other tasks remain accessible afterward.
@@ -328,6 +372,7 @@ function renderFocus(){
  for(const o of others){
   const isMember=!!t.groupId&&o.groupId===t.groupId;
   let item=document.createElement('div');item.className='focus-mini-item'+(isMember?' in-group':'');
+  item.classList.add('tone-'+(o.tone||'neutral'));
   const button=document.createElement('button');button.className='mini'+(isMember?' member':'');
   button.setAttribute('aria-label','Открыть '+o.title);button.onclick=()=>openFocus(o.id);
   const label=document.createElement('span');label.className='mini-caption';label.textContent=o.title;
@@ -340,7 +385,7 @@ function renderFocus(){
    tray.append(name);
    const row=document.createElement('div');row.className='group-tray-row';
    for(const m of related){
-     const wrap=document.createElement('div');wrap.className='group-member';
+     const wrap=document.createElement('div');wrap.className='group-member tone-'+(m.tone||'neutral');
      const bubble=document.createElement('button');bubble.className='group-orb'+(m.id===t.id?' current':'');
      bubble.textContent=m.title;bubble.onclick=()=>{if(m.id!==focusId)openFocus(m.id)};
      const controls=document.createElement('div');controls.className='group-member-actions';
@@ -358,7 +403,32 @@ function toastMsg(msg,canUndo=false){clearTimeout(toastTimer);$('toastText').tex
 $('undo').onclick=()=>{if(lastCompleted){const t=get(lastCompleted);if(t)t.done=false;lastCompleted=null;$('toast').classList.remove('visible');render()}};
 function showSheet(html,action){$('sheet').innerHTML=html;$('modal').classList.add('show');$('sheet').querySelectorAll('[data-act]').forEach(x=>x.onclick=()=>action(x.dataset.act));}
 function hideSheet(){$('modal').classList.remove('show')}
-function addOrEdit(t){let edit=!!t;showSheet(`<h3>${edit?'Изменить задачу':'Новая задача'}</h3><p>Одно действие — один пузырь. Остальные детали добавим позже.</p><textarea id="taskTitle" placeholder="Что нужно сделать?">${edit?escapeHTML(t.title):''}</textarea><div class="sheet-actions"><button class="primary" data-act="save">${edit?'Сохранить':'Создать пузырь'}</button><button data-act="cancel">Отмена</button></div>`,(act)=>{if(act==='cancel'){hideSheet();return}let v=$('taskTitle').value.trim();if(!v)return;if(edit){t.title=v;renderFocus()}else{const id=Math.max(0,...tasks.map(t=>t.id))+1;tasks.push({id,title:v,x:50+Math.random()*20-10,y:($('scrollSpace').scrollTop+$('scrollSpace').clientHeight*.45)/stage.getBoundingClientRect().height*100,size:94,done:false});toastMsg('Новый пузырь создан',false)}hideSheet();render();});setTimeout(()=>$('taskTitle')?.focus(),50)}
+function addOrEdit(t){
+ const edit=!!t;let selectedTone=t?.tone||'neutral';
+ const choices=['neutral','work','personal','health'];
+ const names={neutral:'Без категории',work:'Работа',personal:'Личное',health:'Здоровье'};
+ showSheet(`<h3>${edit?'Изменить задачу':'Новая задача'}</h3>
+ <textarea id="taskTitle" placeholder="Что нужно сделать?">${edit?escapeHTML(t.title):''}</textarea>
+ <div class="tone-picker sheet-tones" aria-label="Цветовая категория">
+ ${choices.map(tone=>`<button type="button" class="tone-swatch tone-${tone}${tone===selectedTone?' selected':''}" data-tone="${tone}" aria-label="${names[tone]}" title="${names[tone]}"></button>`).join('')}
+ </div><div class="sheet-actions"><button class="primary" data-act="save">${edit?'Сохранить':'Создать пузырь'}</button><button data-act="cancel">Отмена</button></div>`,(act)=>{
+ if(act==='cancel'){hideSheet();return;}
+ const v=$('taskTitle').value.trim();if(!v)return;
+ if(edit){t.title=v;t.tone=selectedTone;renderFocus();}
+ else{
+  const id=Math.max(0,...tasks.map(t=>t.id))+1;
+  tasks.push({id,title:v,tone:selectedTone,x:50+Math.random()*20-10,y:($('scrollSpace').scrollTop+$('scrollSpace').clientHeight*.45)/stage.getBoundingClientRect().height*100,size:94,done:false});
+  toastMsg('Новый пузырь создан',false);
+ }
+ hideSheet();render();
+ });
+ $('sheet').querySelectorAll('[data-tone]').forEach(button=>button.onclick=()=>{
+  selectedTone=button.dataset.tone;
+  $('sheet').querySelectorAll('[data-tone]').forEach(b=>b.classList.toggle('selected',b===button));
+ });
+ setTimeout(()=>$('taskTitle')?.focus(),50);
+}
+
 $('add').onclick=()=>addOrEdit();$('edit').onclick=()=>addOrEdit(get(focusId));$('back').onclick=closeFocus;
 $('theme').onclick=()=>{phone.classList.toggle('dark');$('theme').textContent=phone.classList.contains('dark')?'☀':'☾'};
 $('sound').onclick=()=>{soundEnabled=!soundEnabled;$('sound').textContent=soundEnabled?'♪':'×';toastMsg(soundEnabled?'Звук включён':'Звук выключен',false)};
