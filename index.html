@@ -89,6 +89,52 @@ button,input,textarea{font:inherit}button{cursor:pointer}button:focus-visible,.b
 .bubble .orb.holding{z-index:8;filter:brightness(1.12);overflow:visible}
 .bubble:has(.orb.holding){z-index:35!important}
 
+
+/* Bubble Surface v2 — thin soap film rather than solid plastic. */
+.bubble .orb,.focus-center .orb{
+ background:
+  radial-gradient(ellipse 67% 37% at 49% 105%,rgba(var(--tone-rgb,171,161,224),.40),transparent 87%),
+  radial-gradient(ellipse 28% 16% at 18% 17%,rgba(255,255,255,.38),transparent 83%),
+  radial-gradient(ellipse 40% 62% at 90% 54%,rgba(101,224,251,.29),transparent 79%),
+  radial-gradient(ellipse 39% 47% at 11% 77%,rgba(246,123,216,.24),transparent 80%),
+  radial-gradient(ellipse 50% 29% at 57% 93%,rgba(254,223,104,.27),transparent 87%),
+  conic-gradient(from 27deg at 50% 50%,rgba(82,219,255,.10) 0deg,rgba(236,130,245,.23) 47deg,rgba(255,226,124,.20) 97deg,rgba(104,245,203,.16) 145deg,rgba(102,188,255,.22) 207deg,rgba(255,146,210,.20) 259deg,rgba(247,221,122,.14) 311deg,rgba(82,219,255,.10) 360deg);
+ border:1.4px solid rgba(var(--tone-rim,168,210,251),.78);
+ box-shadow:inset 0 0 4px 1px rgba(255,255,255,.56),inset -3px -5px 12px rgba(var(--tone-rgb,171,161,224),.15),inset 3px 4px 9px rgba(105,221,252,.16),0 2px 8px rgba(53,114,163,.10),0 0 0 1px rgba(229,154,235,.18);
+}
+.bubble .orb:before,.focus-center .orb:before{
+ inset:0;
+ background:conic-gradient(from 12deg,rgba(255,119,203,.54),rgba(106,211,255,.60) 48deg,rgba(131,244,194,.34) 86deg,rgba(255,233,113,.52) 126deg,rgba(244,131,228,.54) 170deg,rgba(108,224,255,.38) 218deg,rgba(255,202,117,.50) 276deg,rgba(119,230,224,.51) 319deg,rgba(255,119,203,.54));
+ -webkit-mask:radial-gradient(circle,transparent 70%,rgba(0,0,0,.30) 78%,#000 96%);
+ mask:radial-gradient(circle,transparent 70%,rgba(0,0,0,.30) 78%,#000 96%);
+ opacity:.9;
+}
+.bubble .orb:after,.focus-center .orb:after{
+ width:25%;height:8%;top:8%;left:13%;
+ transform:rotate(-39deg);
+ background:linear-gradient(180deg,rgba(255,255,255,.86),rgba(255,255,255,.35) 46%,transparent);
+ border-radius:100% 60% 100% 70%;
+ filter:blur(.8px);
+ box-shadow:none;
+}
+.bubble .bubble-inner::after{
+ content:"";position:absolute;pointer-events:none;z-index:2;
+ width:10%;height:4%;left:80%;top:65%;
+ border-radius:50%;transform:rotate(-52deg);
+ background:rgba(255,255,255,.67);
+ filter:blur(.7px);
+}
+.dark .bubble .orb,.dark .focus-center .orb{
+ background:
+  radial-gradient(ellipse 68% 39% at 50% 102%,rgba(var(--tone-rgb,171,161,224),.49),transparent 85%),
+  radial-gradient(ellipse 24% 18% at 17% 17%,rgba(255,255,255,.34),transparent 82%),
+  radial-gradient(ellipse 43% 65% at 92% 52%,rgba(88,210,253,.36),transparent 81%),
+  radial-gradient(ellipse 43% 49% at 9% 78%,rgba(245,120,227,.32),transparent 83%),
+  radial-gradient(ellipse 53% 33% at 55% 94%,rgba(252,218,103,.29),transparent 87%),
+  conic-gradient(from 28deg,rgba(117,217,252,.11),rgba(246,137,218,.19),rgba(247,214,128,.13),rgba(99,231,202,.16),rgba(123,181,251,.14),rgba(245,140,207,.16),rgba(117,217,252,.11));
+ border-color:rgba(var(--tone-rim,168,210,251),.87);
+ box-shadow:inset 0 0 7px rgba(247,242,255,.38),inset -5px -8px 16px rgba(var(--tone-rgb,171,161,224),.23),inset 4px 3px 12px rgba(82,194,242,.19),0 3px 15px rgba(17,78,147,.16);
+}
 /* Category hues tint only the lower soap film; all bubbles retain the same glass optics. */
 .tone-neutral{--tone-rgb:171,161,224;--tone-rim:168,210,251}
 .tone-work{--tone-rgb:74,161,236;--tone-rim:104,201,255}
