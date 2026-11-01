@@ -198,14 +198,15 @@ button,input,textarea{font:inherit}button{cursor:pointer}button:focus-visible,.b
  background:#d8e3eb;
 }
 .task-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}.task-fields label{display:flex;flex-direction:column;gap:5px;font-size:12px;color:inherit}.task-fields input,.task-fields select{width:100%;min-width:0;border:1px solid #cddce8;border-radius:10px;padding:9px 6px;background:#fff;color:#30475d;font-size:13px}.task-detail-summary{font-size:11px;color:var(--muted);text-align:center}.dark .task-fields input,.dark .task-fields select{background:#2b3650;color:#fff;border-color:#59647c}
+.today-toggle{width:auto;min-width:55px;padding:0 8px;font-size:12px;font-weight:650}.today-toggle.active{background:rgba(135,199,233,.43)}.today-view{position:absolute;top:89px;bottom:110px;left:0;right:0;z-index:4;overflow:auto;padding:20px 19px;background:var(--sky)}.today-view[hidden]{display:none}.today-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px}.today-label{font-size:10px;font-weight:650;letter-spacing:.12em;color:var(--muted)}.today-date{font-size:20px;margin-top:5px}.today-total,.today-section-title,.today-sub{font-size:11px;color:var(--muted)}.today-section-title{margin:19px 0 10px;font-weight:650}.today-task{display:flex;align-items:center;gap:14px;width:100%;padding:11px;margin-bottom:9px;border:1px solid var(--line);border-radius:18px;background:var(--glass);color:var(--ink);text-align:left}.today-orb{width:54px;height:54px;flex:none;position:relative;border-radius:50%}.today-orb .orb{width:100%;height:100%}.today-name{font-size:14px;line-height:1.4;overflow-wrap:anywhere}.today-sub{display:block;margin-top:4px}.today-empty{padding:34px 10px;color:var(--muted);font-size:13px;line-height:1.65;text-align:center}
 </style>
 </head>
 <body>
 <div class="phone" id="phone">
 <div class="sky"></div>
-<header class="header"><div><div class="brand">mind sort <span style="font-weight:300;opacity:.6">/ bubbles</span></div><div class="subtitle">интерактивный эскиз · 01</div></div><div class="header-actions"><button class="ico" id="sound" title="Звук вкл/выкл">♪</button><button class="ico" id="theme" title="Сменить свет/темноту">☾</button></div></header>
+<header class="header"><div><div class="brand">mind sort <span style="font-weight:300;opacity:.6">/ bubbles</span></div><div class="subtitle">интерактивный эскиз · 01</div></div><div class="header-actions"><button class="ico today-toggle" id="todayToggle" aria-pressed="false" title="Задачи на сегодня">Today</button><button class="ico" id="sound" title="Звук вкл/выкл">♪</button><button class="ico" id="theme" title="Сменить свет/темноту">☾</button></div></header>
 <div class="scroll-space" id="scrollSpace"><main class="stage" id="stage" aria-label="Пространство задач"></main></div>
-<footer class="footer"><div class="controls"><div class="foot-note">Перетащи пузырь.<br>Коснись — открыть.<br>Щипок или колёсико — изменить размер.</div><div class="foot-actions"><button class="ico" id="archive" title="Выполненные задачи">✓</button><button class="add" id="add" title="Создать задачу">+</button></div></div><div class="footer-stat" id="stat"></div></footer>
+<section class="today-view" id="todayView" hidden><div class="today-head"><div><div class="today-label">ФОКУС НА СЕГОДНЯ</div><div class="today-date" id="todayDate"></div></div><span class="today-total" id="todayTotal"></span></div><div id="todayItems"></div></section><footer class="footer"><div class="controls"><div class="foot-note">Перетащи пузырь.<br>Коснись — открыть.<br>Щипок или колёсико — изменить размер.</div><div class="foot-actions"><button class="ico" id="archive" title="Выполненные задачи">✓</button><button class="add" id="add" title="Создать задачу">+</button></div></div><div class="footer-stat" id="stat"></div></footer>
 <section class="focus" id="focus" aria-label="Выбранная задача"><div class="focus-top"><button class="ico" id="back" aria-label="Назад">‹</button><div style="font-size:11px;color:var(--muted)">Выбранная задача</div><button class="ico" id="edit" title="Изменить текст">✎</button></div><div class="focus-center" id="focusCenter"></div><div class="focus-meta" id="focusMeta"></div><div class="focus-dock" id="focusDock"></div></section>
 <div class="burst" id="burst"><div class="burst-ring"></div></div>
 <div class="modal-cover" id="modal"><div class="sheet" id="sheet"></div></div>
@@ -235,7 +236,7 @@ try{const raw=localStorage.getItem(STORAGE_KEY);if(raw){const v=JSON.parse(raw);
 if(loadedState)tasks=loadedState.tasks.filter(t=>t&&Number.isFinite(t.id)&&typeof t.title==='string').map(t=>({...t,done:!!t.done}));
 function persistNow(){
  try{
-  const state={version:1,tasks,layoutMode,gridOrder,freePositions:[...freePositions.entries()],scrollTop:$('scrollSpace').scrollTop,theme:phone.classList.contains('dark'),groupCount};
+  const state={version:1,tasks,layoutMode,gridOrder,freePositions:[...freePositions.entries()],scrollTop:$('scrollSpace').scrollTop,theme:phone.classList.contains('dark'),todayMode,groupCount};
   localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
  }catch(e){console.warn('Could not persist',e)}
 }
@@ -243,12 +244,37 @@ function scheduleSave(){clearTimeout(saveTimer);saveTimer=setTimeout(persistNow,
 window.addEventListener('pagehide',persistNow);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')persistNow()});
 
+
+let todayMode=false;
+function todayKey(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function renderToday(){
+ const day=todayKey();
+ const due=tasks.filter(t=>!t.done&&typeof t.dueDate==='string'&&t.dueDate<=day).sort((a,b)=>a.dueDate.localeCompare(b.dueDate)||a.id-b.id);
+ $('todayDate').textContent=new Intl.DateTimeFormat('ru-RU',{day:'numeric',month:'long',weekday:'long'}).format(new Date());
+ $('todayTotal').textContent=due.length+' задач';
+ const target=$('todayItems');target.replaceChildren();
+ for(const [heading,items] of [['Просрочено',due.filter(t=>t.dueDate<day)],['Сегодня',due.filter(t=>t.dueDate===day)]]){
+  if(!items.length)continue;
+  const h=document.createElement('div');h.className='today-section-title';h.textContent=heading+' · '+items.length;target.appendChild(h);
+  for(const t of items){
+   const btn=document.createElement('button');btn.className='today-task';btn.type='button';
+   const orb=document.createElement('span');orb.className='today-orb tone-'+(t.tone||'neutral');orb.innerHTML='<span class="orb"></span>';
+   const name=document.createElement('span');name.className='today-name';name.textContent=t.title;
+   const sub=document.createElement('span');sub.className='today-sub';sub.textContent=t.dueDate.split('-').reverse().join('.');name.appendChild(sub);
+   btn.append(orb,name);btn.onclick=()=>openFocus(t.id);target.appendChild(btn);
+  }
+ }
+ if(!due.length){const empty=document.createElement('div');empty.className='today-empty';empty.textContent='На сегодня нет запланированных задач. Задачи с датой появятся здесь автоматически.';target.appendChild(empty)}
+}
+function setTodayMode(value){todayMode=!!value;$('todayView').hidden=!todayMode;$('todayToggle').classList.toggle('active',todayMode);$('todayToggle').setAttribute('aria-pressed',String(todayMode));if(todayMode)renderToday();scheduleSave()}
+$('todayToggle').onclick=()=>setTodayMode(!todayMode);
+
 let focusId=null, gest=null, groupCount=1, pending=null, lastCompleted=null, toastTimer=null, soundEnabled=true;
 const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
 const get=id=>tasks.find(t=>t.id===id);
 function escapeHTML(v){return String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function textForBubble(t){return t.size<65?'···':escapeHTML(t.title)}
-function render(){stage.innerHTML='';for(const t of tasks){if(t.done||t.parentId)continue;let div=document.createElement('div');div.className='bubble tone-'+(t.tone||'neutral')+(t.size<65?' small':'');div.dataset.id=t.id;div.tabIndex=0;div.setAttribute('role','button');div.setAttribute('aria-label',t.title);div.style.left=t.x+'%';div.style.top=t.y+'%';div.style.width=t.size+'px';div.style.height=t.size+'px';div.style.setProperty('--float-time',(2.4+(Math.sin(t.id*17.13)*.5+.5)*2.2)+'s');
+function render(){if(todayMode)renderToday();stage.innerHTML='';for(const t of tasks){if(t.done||t.parentId)continue;let div=document.createElement('div');div.className='bubble tone-'+(t.tone||'neutral')+(t.size<65?' small':'');div.dataset.id=t.id;div.tabIndex=0;div.setAttribute('role','button');div.setAttribute('aria-label',t.title);div.style.left=t.x+'%';div.style.top=t.y+'%';div.style.width=t.size+'px';div.style.height=t.size+'px';div.style.setProperty('--float-time',(2.4+(Math.sin(t.id*17.13)*.5+.5)*2.2)+'s');
 div.style.setProperty('--phase',(-((t.id*2.731)%7.8))+'s');
 div.style.setProperty('--drift-x',(Math.sin(t.id*2.13)*9).toFixed(2)+'px');
 div.style.setProperty('--drift-y',(Math.cos(t.id*3.71)*9).toFixed(2)+'px');
@@ -644,6 +670,7 @@ gridButton.addEventListener('click',()=>{
 });
 
 render();
+if(loadedState?.todayMode)setTodayMode(true);
 if(loadedState){const sc=$('scrollSpace');requestAnimationFrame(()=>{sc.scrollTop=Number(loadedState.scrollTop)||0;if(layoutMode==='grid')applyGridPositions();render()});}
 $('scrollSpace').addEventListener('scroll',scheduleSave,{passive:true});
 })();
