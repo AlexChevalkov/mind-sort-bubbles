@@ -197,6 +197,7 @@ button,input,textarea{font:inherit}button{cursor:pointer}button:focus-visible,.b
  --sky:radial-gradient(ellipse at 12% 25%,rgba(226,176,205,.26),transparent 43%),radial-gradient(ellipse at 92% 62%,rgba(109,166,213,.35),transparent 45%),radial-gradient(ellipse at 45% 88%,rgba(136,194,187,.25),transparent 50%),linear-gradient(155deg,#dce6eb 0%,#d6e1e9 57%,#ccdce9 100%);
  background:#d8e3eb;
 }
+.task-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}.task-fields label{display:flex;flex-direction:column;gap:5px;font-size:12px;color:inherit}.task-fields input,.task-fields select{width:100%;min-width:0;border:1px solid #cddce8;border-radius:10px;padding:9px 6px;background:#fff;color:#30475d;font-size:13px}.task-detail-summary{font-size:11px;color:var(--muted);text-align:center}.dark .task-fields input,.dark .task-fields select{background:#2b3650;color:#fff;border-color:#59647c}
 </style>
 </head>
 <body>
@@ -226,6 +227,22 @@ let tasks=[
 ];
 // Convert the original one-screen coordinates to the first of three screens.
 tasks.forEach(t=>{t.y/=3});
+
+// Persistent prototype state (local to this browser/device; no account sync yet).
+const STORAGE_KEY='mind-sort-bubbles-v1';
+let saveTimer=0,loadedState=null;
+try{const raw=localStorage.getItem(STORAGE_KEY);if(raw){const v=JSON.parse(raw);if(v&&Array.isArray(v.tasks))loadedState=v;}}catch(e){console.warn('Storage unavailable',e)}
+if(loadedState)tasks=loadedState.tasks.filter(t=>t&&Number.isFinite(t.id)&&typeof t.title==='string').map(t=>({...t,done:!!t.done}));
+function persistNow(){
+ try{
+  const state={version:1,tasks,layoutMode,gridOrder,freePositions:[...freePositions.entries()],scrollTop:$('scrollSpace').scrollTop,theme:phone.classList.contains('dark'),groupCount};
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
+ }catch(e){console.warn('Could not persist',e)}
+}
+function scheduleSave(){clearTimeout(saveTimer);saveTimer=setTimeout(persistNow,300)}
+window.addEventListener('pagehide',persistNow);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')persistNow()});
+
 let focusId=null, gest=null, groupCount=1, pending=null, lastCompleted=null, toastTimer=null, soundEnabled=true;
 const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
 const get=id=>tasks.find(t=>t.id===id);
@@ -237,7 +254,7 @@ div.style.setProperty('--drift-x',(Math.sin(t.id*2.13)*9).toFixed(2)+'px');
 div.style.setProperty('--drift-y',(Math.cos(t.id*3.71)*9).toFixed(2)+'px');
 div.style.setProperty('--swing',(Math.sin(t.id*4.3)*5).toFixed(2)+'deg');let groupNum=tasks.filter(o=>!o.done&&o.groupId&&o.groupId===t.groupId).length;let children=tasks.filter(o=>!o.done&&o.parentId===t.id).length;div.innerHTML=`<div class="bubble-inner"><div class="orb"><span class="orb-text" style="font-size:${clamp(t.size*.095,9,15)}px">${textForBubble(t)}</span></div></div>${children?`<span class="group-dot">${children} ↳</span>`:groupNum>1?`<span class="group-dot">${groupNum}</span>`:''}`;
  div.addEventListener('pointerdown',onDown);div.addEventListener('pointermove',onMove);div.addEventListener('pointerup',onUp);div.addEventListener('pointercancel',onCancel);div.addEventListener('wheel',onWheel,{passive:false});div.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openFocus(t.id)}});stage.appendChild(div);
-} $('stat').textContent=`${tasks.filter(t=>!t.done).length} активных · ${tasks.filter(t=>t.done).length} выполненных`;}
+} scheduleSave(); $('stat').textContent=`${tasks.filter(t=>!t.done).length} активных · ${tasks.filter(t=>t.done).length} выполненных`;}
 /* Unified pointer tracking: touch targets are found by proximity, not DOM hitboxes. */
 const contacts=new Map();let gesture=null;
 function chooseBubble(x,y){
@@ -290,7 +307,7 @@ function completeTaskFromStage(id){
  if(el){el.style.zIndex='40';el.animate([{opacity:1,filter:'brightness(1.7)',transform:'translate(-50%,-50%) scale(1)'},{opacity:0,filter:'brightness(2)',transform:'translate(-50%,-50%) scale(1.4)'}],{duration:260,fill:'forwards'});}
  $('burst').classList.add('show');
  lastCompleted=id;
- setTimeout(()=>{$('burst').classList.remove('show');t.done=true;render();toastMsg('Задача выполнена',true)},380);
+ setTimeout(()=>{$('burst').classList.remove('show');t.done=true;render();scheduleSave();toastMsg('Задача выполнена',true)},380);
 }
 
 function beginContact(e){
@@ -399,7 +416,7 @@ function finishContact(e){
     a.y=(centerY-Math.sin(ang)*desired/2)/rect.height*100;
     b.x=(centerX+Math.cos(ang)*desired/2)/rect.width*100;
     b.y=(centerY+Math.sin(ang)*desired/2)/rect.height*100;
-    toastMsg('Пузыри соединены · перемещаются вместе',false);
+    toastMsg('Пузыри соединены · перемещаются вместе',false);scheduleSave();
    }
    // Hold two members of one group and pull them apart to separate.
    else if(a.groupId&&a.groupId===b.groupId && distance>threshold+26){
@@ -431,12 +448,17 @@ function renderFocus(){
  const members=related.length>1?related:children;
  $('focusMeta').innerHTML=`<button class="pill pop" id="complete">Лопнуть · выполнено</button>${members.length?'<div class="focus-desc">Выбери любой пузырь группы для редактирования или завершения</div>':''}`;
  $('complete').onclick=()=>completeTask(t.id);
+ const details=document.createElement('div');details.className='task-detail-summary';
+ const due=t.dueDate?('Дата: '+t.dueDate.split('-').reverse().join('.')):'Без даты';
+ const repeats={daily:'Ежедневно',weekly:'Еженедельно',monthly:'Ежемесячно'};
+ details.textContent=due+(t.repeat&&t.repeat!=='none'?' · '+(repeats[t.repeat]||''):'');
+ $('focusMeta').appendChild(details);
  const picker=document.createElement('div');picker.className='tone-picker';picker.setAttribute('aria-label','Цветовое семейство');
  for(const tone of ['neutral','work','personal','health']){
   const btn=document.createElement('button');btn.type='button';btn.className='tone-swatch tone-'+tone+(tone===(t.tone||'neutral')?' selected':'');
   btn.title=({neutral:'Без категории',work:'Работа',personal:'Личное',health:'Здоровье'})[tone];
   btn.setAttribute('aria-label',btn.title);
-  btn.onclick=()=>{t.tone=tone;renderFocus();render();};
+  btn.onclick=()=>{t.tone=tone;renderFocus();render();scheduleSave();};
   picker.appendChild(btn);
  }
  $('focusMeta').appendChild(picker);
@@ -473,9 +495,9 @@ function renderFocus(){
 }
 function closeFocus(){document.getElementById('groupTray')?.remove();focusId=null;$('focus').classList.remove('visible');render();}
 function playPop(){if(soundEnabled){try{const C=window.AudioContext||window.webkitAudioContext;if(C){const ctx=new C(),osc=ctx.createOscillator(),g=ctx.createGain();osc.type='sine';osc.frequency.setValueAtTime(360,ctx.currentTime);osc.frequency.exponentialRampToValueAtTime(105,ctx.currentTime+.12);g.gain.setValueAtTime(.14,ctx.currentTime);g.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+.17);osc.connect(g);g.connect(ctx.destination);osc.start();osc.stop(ctx.currentTime+.18);osc.onended=()=>ctx.close();}}catch(e){}}if(navigator.vibrate)navigator.vibrate(22)}
-function completeTask(id){const t=get(id);if(!t||t.done)return;playPop();$('burst').classList.add('show');lastCompleted=id;window.setTimeout(()=>{$('burst').classList.remove('show');t.done=true;const remaining=t.groupId?tasks.find(x=>!x.done&&x.groupId===t.groupId):null;if(remaining)openFocus(remaining.id);else closeFocus();toastMsg('Задача выполнена',true)},430)}
+function completeTask(id){const t=get(id);if(!t||t.done)return;playPop();$('burst').classList.add('show');lastCompleted=id;window.setTimeout(()=>{$('burst').classList.remove('show');t.done=true;scheduleSave();const remaining=t.groupId?tasks.find(x=>!x.done&&x.groupId===t.groupId):null;if(remaining)openFocus(remaining.id);else closeFocus();toastMsg('Задача выполнена',true)},430)}
 function toastMsg(msg,canUndo=false){clearTimeout(toastTimer);$('toastText').textContent=msg;$('undo').style.display=canUndo?'inline':'none';$('toast').classList.add('visible');toastTimer=setTimeout(()=>$('toast').classList.remove('visible'),5800)}
-$('undo').onclick=()=>{if(lastCompleted){const t=get(lastCompleted);if(t)t.done=false;lastCompleted=null;$('toast').classList.remove('visible');render()}};
+$('undo').onclick=()=>{if(lastCompleted){const t=get(lastCompleted);if(t)t.done=false;scheduleSave();lastCompleted=null;$('toast').classList.remove('visible');render()}};
 function showSheet(html,action){$('sheet').innerHTML=html;$('modal').classList.add('show');$('sheet').querySelectorAll('[data-act]').forEach(x=>x.onclick=()=>action(x.dataset.act));}
 function hideSheet(){$('modal').classList.remove('show')}
 function addOrEdit(t){
@@ -484,19 +506,22 @@ function addOrEdit(t){
  const names={neutral:'Без категории',work:'Работа',personal:'Личное',health:'Здоровье'};
  showSheet(`<h3>${edit?'Изменить задачу':'Новая задача'}</h3>
  <textarea id="taskTitle" placeholder="Что нужно сделать?">${edit?escapeHTML(t.title):''}</textarea>
+ <div class="task-fields"><label>Дата <input id="taskDate" type="date" value="${edit?escapeHTML(t.dueDate||''):''}"></label><label>Повторение <select id="taskRepeat"><option value="none">Не повторять</option><option value="daily">Каждый день</option><option value="weekly">Каждую неделю</option><option value="monthly">Каждый месяц</option></select></label></div>
  <div class="tone-picker sheet-tones" aria-label="Цветовая категория">
  ${choices.map(tone=>`<button type="button" class="tone-swatch tone-${tone}${tone===selectedTone?' selected':''}" data-tone="${tone}" aria-label="${names[tone]}" title="${names[tone]}"></button>`).join('')}
  </div><div class="sheet-actions"><button class="primary" data-act="save">${edit?'Сохранить':'Создать пузырь'}</button><button data-act="cancel">Отмена</button></div>`,(act)=>{
  if(act==='cancel'){hideSheet();return;}
  const v=$('taskTitle').value.trim();if(!v)return;
- if(edit){t.title=v;t.tone=selectedTone;renderFocus();}
+ const dueDate=$('taskDate').value||null,repeat=$('taskRepeat').value;
+ if(edit){t.title=v;t.tone=selectedTone;t.dueDate=dueDate;t.repeat=repeat;renderFocus();}
  else{
   const id=Math.max(0,...tasks.map(t=>t.id))+1;
-  tasks.push({id,title:v,tone:selectedTone,x:50+Math.random()*20-10,y:($('scrollSpace').scrollTop+$('scrollSpace').clientHeight*.45)/stage.getBoundingClientRect().height*100,size:94,done:false});
+  tasks.push({id,title:v,tone:selectedTone,dueDate,repeat,x:50+Math.random()*20-10,y:($('scrollSpace').scrollTop+$('scrollSpace').clientHeight*.45)/stage.getBoundingClientRect().height*100,size:94,done:false});
   toastMsg('Новый пузырь создан',false);
  }
- hideSheet();render();
+ hideSheet();render();scheduleSave();
  });
+ $('taskRepeat').value=edit?(t.repeat||'none'):'none';
  $('sheet').querySelectorAll('[data-tone]').forEach(button=>button.onclick=()=>{
   selectedTone=button.dataset.tone;
   $('sheet').querySelectorAll('[data-tone]').forEach(b=>b.classList.toggle('selected',b===button));
@@ -574,7 +599,7 @@ function settlePhysics(id){
  let n=0;cancelAnimationFrame(settling);
  function step(){const active=get(id);if(!active)return;
   pushNeighbors(active,5);
-  if(++n<34)settling=requestAnimationFrame(step);
+  if(++n<34)settling=requestAnimationFrame(step);else scheduleSave();
  }
  settling=requestAnimationFrame(step);
 }
@@ -582,7 +607,8 @@ const gridButton=document.createElement('button');
 gridButton.className='ico';gridButton.textContent='▦';gridButton.title='Сетка / свободное расположение';
 gridButton.setAttribute('aria-label','Сетка или свободное расположение');
 document.querySelector('.header-actions').prepend(gridButton);
-const freePositions=new Map();
+const freePositions=new Map(loadedState?.freePositions||[]);
+if(loadedState){layoutMode=loadedState.layoutMode==='grid'?'grid':'free';gridOrder=Array.isArray(loadedState.gridOrder)?loadedState.gridOrder:[];groupCount=Number(loadedState.groupCount)||1;if(loadedState.theme)phone.classList.add('dark');phone.classList.toggle('grid-mode',layoutMode==='grid');gridButton.textContent=layoutMode==='grid'?'◌':'▦';}
 function applyGridPositions(){
  const rect=stage.getBoundingClientRect(),objects=liveObjects(),cols=3,gap=12,sidePadding=14;
  const diameter=Math.min(92,(rect.width-sidePadding*2-gap*(cols-1))/cols);
@@ -618,6 +644,8 @@ gridButton.addEventListener('click',()=>{
 });
 
 render();
+if(loadedState){const sc=$('scrollSpace');requestAnimationFrame(()=>{sc.scrollTop=Number(loadedState.scrollTop)||0;if(layoutMode==='grid')applyGridPositions();render()});}
+$('scrollSpace').addEventListener('scroll',scheduleSave,{passive:true});
 })();
 </script>
 </body></html>
